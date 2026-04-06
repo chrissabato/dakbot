@@ -44,22 +44,83 @@ GPIO17 is configured as UART TX but left unconnected — the AllSport link is re
 
 ---
 
-## MicroPython firmware
+## Installation
 
-The standard ESP32-S3 MicroPython binary does **not** include W5500 support. You need a build compiled with the W5500 driver enabled.
+### 1. Install tools
 
-Verify your build in the REPL:
+Requires Python 3.
+
+```bash
+pip install esptool mpremote
+```
+
+### 2. Download MicroPython firmware
+
+Go to **https://micropython.org/download/ESP32_GENERIC_S3/** and download the latest `.bin` file.
+
+### 3. Put the board in bootloader mode
+
+1. Hold the **BOOT** button
+2. Press and release **RESET**
+3. Release **BOOT**
+
+The board will appear as a serial port:
+- **Windows:** `COM3`, `COM4`, etc. — check Device Manager
+- **Mac:** `/dev/cu.usbmodem*` or `/dev/cu.usbserial*`
+- **Linux:** `/dev/ttyACM0` or `/dev/ttyUSB0`
+
+### 4. Flash the firmware
+
+Replace `PORT` with your port and `FIRMWARE.bin` with the filename you downloaded:
+
+```bash
+esptool.py --chip esp32s3 --port PORT erase_flash
+esptool.py --chip esp32s3 --port PORT write_flash -z 0 FIRMWARE.bin
+```
+
+Press **RESET** after flashing.
+
+### 5. Verify W5500 support
+
+```bash
+mpremote connect PORT
+```
+
+At the `>>>` prompt:
 
 ```python
 import network
 print(hasattr(network, 'PHY_W5500'))   # must print True
 ```
 
-To build from source:
+Press `Ctrl+X` to exit. If it prints `False`, try the `ESP32_GENERIC_S3-SPIRAM` variant from the same download page.
+
+### 6. Copy the project files
+
+From inside the `dakbot` repo folder:
 
 ```bash
-make BOARD=ESP32_GENERIC_S3 MICROPY_PY_NETWORK_WIZNET5K=5500
+mpremote connect PORT cp config.py :config.py
+mpremote connect PORT cp settings.py :settings.py
+mpremote connect PORT cp daktronics.py :daktronics.py
+mpremote connect PORT cp webserver.py :webserver.py
+mpremote connect PORT cp main.py :main.py
+mpremote connect PORT cp daksports.json :daksports.json
 ```
+
+### 7. Boot and verify
+
+Press **RESET**. Connect to the REPL to see startup output:
+
+```
+Settings loaded from settings.json
+Ethernet connected: ('192.168.x.x', '255.255.255.0', ...)
+Sport: baseball | RTD buffer: 343 chars
+HTTP server listening on port 80
+Serial reader started
+```
+
+Open `http://<ip-shown-above>/settings` in a browser to confirm the UI is up.
 
 ---
 
@@ -71,20 +132,15 @@ User settings (sport, network, UART RX pin) are managed through the web UI at `/
 
 ---
 
-## Flashing
+## Flashing updated code
 
-Copy all files to the root of the device using `mpremote`, Thonny, or `ampy`:
+After the initial install, copy individual changed files with `mpremote`:
 
 ```bash
-mpremote cp config.py :config.py
-mpremote cp settings.py :settings.py
-mpremote cp daktronics.py :daktronics.py
-mpremote cp webserver.py :webserver.py
-mpremote cp main.py :main.py
-mpremote cp daksports.json :daksports.json
+mpremote connect PORT cp main.py :main.py
 ```
 
-The board auto-runs `main.py` on power-up. `settings.json` is generated on the device the first time settings are saved — it is not included in this repo.
+`settings.json` lives only on the device and is not overwritten by copying project files.
 
 ---
 
