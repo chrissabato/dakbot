@@ -1,72 +1,27 @@
 # dakbot
 
-Reads live scoreboard data from a **Daktronics AllSport 5000** controller over its RTD serial port and makes it available as JSON.
-
-Two implementations are included:
-
-| Directory | Platform | Output |
-|---|---|---|
-| *(root)* | Python 3 / any PC | `ScoreBoardData.json` written to disk |
-| `esp32/` | MicroPython on Waveshare ESP32-S3-ETH | JSON served over HTTP on local network |
+MicroPython firmware for the **Waveshare ESP32-S3-ETH** that reads live scoreboard data from a **Daktronics AllSport 5000** controller and serves it as JSON over Ethernet.
 
 ---
 
 ## How it works
 
-The AllSport 5000 continuously broadcasts **RTD (Real Time Data)** packets over a serial port at 19200 baud. Each packet encodes a position and a text value that slots into a fixed-width string buffer. Field names and their positions within that buffer are defined in `daksports.json` for each supported sport.
+The AllSport 5000 continuously broadcasts **RTD (Real Time Data)** packets over a serial port at 19200 baud. Each packet encodes a position and a text value that slots into a fixed-width string buffer. Field names and their byte positions are defined in `daksports.json` for each supported sport.
+
+The ESP32 reads each packet over UART, updates the in-memory scoreboard state, and serves it as JSON on demand via a lightweight HTTP server. No SD card or file writes are needed — data lives in RAM and is always current.
 
 Supported sports: `baseball`, `basketball`, `volleyball`, `football`, `hockeylacrosse`
 
 ---
 
-## Python (PC) version
+## Hardware
 
-### Requirements
-
-```
-pip install pyserial
-```
-
-### Configuration
-
-Edit `settings.json`:
-
-```json
-{
-    "COM_PORT": "COM1",
-    "SPORT": "baseball"
-}
-```
-
-On Linux/Mac the port will be something like `/dev/ttyUSB0`.
-
-### Usage
-
-```bash
-# Normal run
-python scorebug.py
-
-# Reset ScoreBoardData.json to blank defaults first
-python scorebug.py -init
-```
-
-The script prints an ASCII scoreboard to the terminal whenever data changes and keeps `ScoreBoardData.json` updated with the latest values.
-
----
-
-## ESP32-S3 version (Waveshare ESP32-S3-ETH)
-
-### Hardware
-
-- [Waveshare ESP32-S3-ETH](https://www.waveshare.com/wiki/ESP32-S3-ETH) development board
-- Onboard W5500 Ethernet chip (SPI)
-- AllSport 5000 RTD serial output → **MAX3232 level shifter** → ESP32 UART RX
+- [Waveshare ESP32-S3-ETH](https://www.waveshare.com/wiki/ESP32-S3-ETH)
+- AllSport 5000 RTD serial output → **MAX3232 level shifter** → GPIO16
 
 > The AllSport 5000 outputs RS-232 voltage levels (±12 V). A level shifter such as the MAX3232 is required to convert to the 3.3 V logic the ESP32 expects. Connecting RS-232 directly will damage the board.
 
 ### Wiring
-
-**AllSport 5000 → level shifter → ESP32-S3-ETH**
 
 | AllSport 5000 | MAX3232 | ESP32-S3-ETH |
 |---|---|---|
@@ -76,7 +31,7 @@ The script prints an ASCII scoreboard to the terminal whenever data changes and 
 
 GPIO17 is configured as UART TX but left unconnected — the AllSport link is receive-only.
 
-**W5500 pins** (fixed on-board, do not change):
+### W5500 pins (fixed on-board, do not change)
 
 | Signal | GPIO |
 |---|---|
@@ -87,7 +42,9 @@ GPIO17 is configured as UART TX but left unconnected — the AllSport link is re
 | INT | 10 |
 | RST | 9 |
 
-### MicroPython firmware
+---
+
+## MicroPython firmware
 
 The standard ESP32-S3 MicroPython binary does **not** include W5500 support. You need a build compiled with the W5500 driver enabled.
 
@@ -104,17 +61,19 @@ To build from source:
 make BOARD=ESP32_GENERIC_S3 MICROPY_PY_NETWORK_WIZNET5K=5500
 ```
 
-### Configuration
+---
 
-Edit `esp32/config.py` before flashing:
+## Configuration
+
+Edit `config.py` before flashing:
 
 ```python
-SPORT    = "baseball"   # sport key from daksports.json
+SPORT    = "baseball"   # key from daksports.json
 
 UART_RX  = 16           # GPIO wired to level shifter output
 UART_TX  = 17           # unused, leave unconnected
 
-USE_DHCP    = False      # True for DHCP, False for static IP
+USE_DHCP    = False
 STATIC_IP   = '192.168.1.100'
 STATIC_MASK = '255.255.255.0'
 STATIC_GW   = '192.168.1.1'
@@ -123,31 +82,25 @@ STATIC_DNS  = '8.8.8.8'
 HTTP_PORT = 80
 ```
 
-### Flashing
+---
 
-Copy all five files to the root of the device using `mpremote`, Thonny, or `ampy`:
+## Flashing
 
-```
-esp32/config.py       → /config.py
-esp32/daktronics.py   → /daktronics.py
-esp32/webserver.py    → /webserver.py
-esp32/main.py         → /main.py
-esp32/daksports.json  → /daksports.json
-```
-
-Example with `mpremote`:
+Copy all files to the root of the device using `mpremote`, Thonny, or `ampy`:
 
 ```bash
-mpremote cp esp32/config.py :config.py
-mpremote cp esp32/daktronics.py :daktronics.py
-mpremote cp esp32/webserver.py :webserver.py
-mpremote cp esp32/main.py :main.py
-mpremote cp esp32/daksports.json :daksports.json
+mpremote cp config.py :config.py
+mpremote cp daktronics.py :daktronics.py
+mpremote cp webserver.py :webserver.py
+mpremote cp main.py :main.py
+mpremote cp daksports.json :daksports.json
 ```
 
 The board auto-runs `main.py` on power-up.
 
-### API
+---
+
+## API
 
 | Endpoint | Response |
 |---|---|
@@ -155,7 +108,7 @@ The board auto-runs `main.py` on power-up.
 | `GET /data` | Same (alias) |
 | `GET /health` | `{"status":"ok"}` |
 
-All responses include `Access-Control-Allow-Origin: *` so the data can be consumed directly from a browser or any frontend.
+All responses include `Access-Control-Allow-Origin: *`.
 
 Example response (baseball):
 
@@ -175,29 +128,21 @@ Example response (baseball):
     "Strike": "0",
     "Out": "0",
     "Count": "0-0",
-    "Outs": "⚪⚪⚪",
-    ...
+    "Outs": "⚪⚪⚪"
 }
 ```
 
 ---
 
-## File reference
+## Files
 
-```
-dakbot/
-├── daktronics.py          # Python RTD serial parser (pyserial)
-├── scorebug.py            # PC main loop — reads serial, writes JSON, prints scoreboard
-├── daksports.json         # Field name → [position, length] mappings for each sport
-├── settings.json          # PC config: COM port and sport selection
-├── ScoreBoardData.json    # Last known good scoreboard state (PC version)
-└── esp32/
-    ├── main.py            # ESP32 entry point — Ethernet init, async task runner
-    ├── daktronics.py      # Async RTD parser using machine.UART
-    ├── webserver.py       # Minimal async HTTP server (uasyncio)
-    ├── config.py          # ESP32 hardware and network settings
-    └── daksports.json     # Same sport config, copied to device flash
-```
+| File | Purpose |
+|---|---|
+| `main.py` | Entry point — Ethernet init, async task runner |
+| `daktronics.py` | Async RTD serial parser (machine.UART) |
+| `webserver.py` | Minimal async HTTP server (uasyncio) |
+| `config.py` | Hardware and network settings |
+| `daksports.json` | Field name → [position, length] mappings per sport |
 
 ---
 
