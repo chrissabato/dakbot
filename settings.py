@@ -16,7 +16,7 @@ DEFAULTS = {
     "sport":     "baseball",
     "uart_rx":   16,
     "uart_tx":   17,
-    "use_dhcp":  False,
+    "use_dhcp":  True,
     "ip":        "192.168.1.100",
     "mask":      "255.255.255.0",
     "gateway":   "192.168.1.1",
