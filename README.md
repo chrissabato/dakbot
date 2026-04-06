@@ -65,22 +65,9 @@ make BOARD=ESP32_GENERIC_S3 MICROPY_PY_NETWORK_WIZNET5K=5500
 
 ## Configuration
 
-Edit `config.py` before flashing:
+User settings (sport, network, UART RX pin) are managed through the web UI at `/settings` and stored in `settings.json` on the device. Default values are defined in `settings.py`.
 
-```python
-SPORT    = "baseball"   # key from daksports.json
-
-UART_RX  = 16           # GPIO wired to level shifter output
-UART_TX  = 17           # unused, leave unconnected
-
-USE_DHCP    = False
-STATIC_IP   = '192.168.1.100'
-STATIC_MASK = '255.255.255.0'
-STATIC_GW   = '192.168.1.1'
-STATIC_DNS  = '8.8.8.8'
-
-HTTP_PORT = 80
-```
+`config.py` contains only hardware pin constants fixed by the PCB — these should not need to change.
 
 ---
 
@@ -90,23 +77,42 @@ Copy all files to the root of the device using `mpremote`, Thonny, or `ampy`:
 
 ```bash
 mpremote cp config.py :config.py
+mpremote cp settings.py :settings.py
 mpremote cp daktronics.py :daktronics.py
 mpremote cp webserver.py :webserver.py
 mpremote cp main.py :main.py
 mpremote cp daksports.json :daksports.json
 ```
 
-The board auto-runs `main.py` on power-up.
+The board auto-runs `main.py` on power-up. `settings.json` is generated on the device the first time settings are saved — it is not included in this repo.
+
+---
+
+## Settings UI
+
+Navigate to `http://<device-ip>/settings` to configure the device without reflashing.
+
+| Setting | Notes |
+|---|---|
+| Sport | Updates field mapping immediately on next reboot |
+| DHCP / Static IP | Reboot required |
+| HTTP Port | Reboot required |
+| UART RX Pin | GPIO wired to the MAX3232 output — reboot required |
+
+Settings are persisted to `settings.json` on the device flash and survive reboots. Hardware pin constants (W5500 SPI lines, UART baud) stay in `config.py` and require reflashing to change.
 
 ---
 
 ## API
 
-| Endpoint | Response |
-|---|---|
-| `GET /` | Live scoreboard JSON |
-| `GET /data` | Same (alias) |
-| `GET /health` | `{"status":"ok"}` |
+| Endpoint | Method | Description |
+|---|---|---|
+| `/` | GET | Live scoreboard JSON |
+| `/data` | GET | Same (alias) |
+| `/health` | GET | `{"status":"ok"}` |
+| `/settings` | GET | Settings UI (HTML) |
+| `/settings` | POST | Save settings to flash |
+| `/reboot` | POST | Reboot device |
 
 All responses include `Access-Control-Allow-Origin: *`.
 
@@ -141,7 +147,8 @@ Example response (baseball):
 | `main.py` | Entry point — Ethernet init, async task runner |
 | `daktronics.py` | Async RTD serial parser (machine.UART) |
 | `webserver.py` | Minimal async HTTP server (uasyncio) |
-| `config.py` | Hardware and network settings |
+| `config.py` | Hardware pin constants (PCB-fixed, do not change) |
+| `settings.py` | Persistent user settings — loads/saves `settings.json` on flash |
 | `daksports.json` | Field name → [position, length] mappings per sport |
 
 ---
