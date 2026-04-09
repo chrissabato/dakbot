@@ -176,7 +176,18 @@ async def main():
 
     # 5. Run HTTP server and serial reader concurrently
     await webserver.start(port=settings.current.get('http_port', 80))
-    await serial_reader_task(dak, sport_config)
+
+    tasks = [asyncio.create_task(serial_reader_task(dak, sport_config))]
+
+    # 6. Optionally start MQTT publisher
+    if settings.current.get('mqtt_enabled'):
+        import mqtt_publisher
+        tasks.append(asyncio.create_task(
+            mqtt_publisher.run(lambda: webserver.score_data)
+        ))
+        print('MQTT publisher task started')
+
+    await asyncio.gather(*tasks)
 
 
 asyncio.run(main())

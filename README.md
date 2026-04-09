@@ -154,6 +154,9 @@ Navigate to `http://<device-ip>/settings` to configure the device without reflas
 | DHCP / Static IP | Reboot required |
 | HTTP Port | Reboot required |
 | UART RX Pin | GPIO wired to the MAX3232 output — reboot required |
+| MQTT Enable | Toggle MQTT publishing — reboot required |
+| MQTT Broker | Hostname of the MQTT broker (TLS port 8883) |
+| MQTT Topic | Topic to publish score data to (default: `dakbot/score`) |
 
 Settings are persisted to `settings.json` on the device flash and survive reboots. Hardware pin constants (W5500 SPI lines, UART baud) stay in `config.py` and require reflashing to change.
 
@@ -203,9 +206,35 @@ Example response (baseball):
 | `main.py` | Entry point — Ethernet init, async task runner |
 | `daktronics.py` | Async RTD serial parser (machine.UART) |
 | `webserver.py` | Minimal async HTTP server (uasyncio) |
+| `mqtt_publisher.py` | Optional async MQTT publisher (TLS, port 8883) |
+| `client.html` | Browser scoreboard — connects via MQTT WebSocket (WSS, port 8884) |
 | `config.py` | Hardware pin constants (PCB-fixed, do not change) |
 | `settings.py` | Persistent user settings — loads/saves `settings.json` on flash |
 | `daksports.json` | Field name → [position, length] mappings per sport |
+
+---
+
+## MQTT / Public scoreboard
+
+Enable MQTT in the `/settings` UI to push live scores to any MQTT broker. The browser client (`client.html`) connects to the same broker via WebSocket and displays the scoreboard in real time.
+
+### Quick setup with HiveMQ Cloud (free tier)
+
+1. Create a free cluster at [hivemq.com](https://www.hivemq.com/mqtt-cloud-broker/) — 10 connections, unlimited messages.
+2. Create two credentials: one for the ESP32 (publish), one for the browser (subscribe-only).
+3. In the Dakbot settings UI:
+   - Enable MQTT
+   - Broker: `xxxx.s1.eu.hivemq.cloud` (your cluster hostname)
+   - Port: `8883` (TLS)
+   - Fill in the ESP32 username/password
+   - Topic: `dakbot/score` (or any string)
+4. Install `umqtt.simple` on the device (one-time):
+   ```bash
+   mpremote connect PORT mip install umqtt.simple
+   ```
+5. Open `client.html` in any browser, enter the broker hostname, WSS port `8884`, and the browser credential.
+
+The ESP32 publishes with `retain=True`, so late-joining browsers immediately receive the current score.
 
 ---
 

@@ -13,15 +13,21 @@
 import ujson
 
 DEFAULTS = {
-    "sport":     "baseball",
-    "uart_rx":   16,
-    "uart_tx":   17,
-    "use_dhcp":  True,
-    "ip":        "192.168.1.100",
-    "mask":      "255.255.255.0",
-    "gateway":   "192.168.1.1",
-    "dns":       "8.8.8.8",
-    "http_port": 80,
+    "sport":          "baseball",
+    "uart_rx":        16,
+    "uart_tx":        17,
+    "use_dhcp":       True,
+    "ip":             "192.168.1.100",
+    "mask":           "255.255.255.0",
+    "gateway":        "192.168.1.1",
+    "dns":            "8.8.8.8",
+    "http_port":      80,
+    "mqtt_enabled":   False,
+    "mqtt_broker":    "",
+    "mqtt_port":      8883,
+    "mqtt_user":      "",
+    "mqtt_password":  "",
+    "mqtt_topic":     "dakbot/score",
 }
 
 _FILE = "settings.json"

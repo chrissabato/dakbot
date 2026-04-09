@@ -96,6 +96,36 @@ _CSS = (
     '.ok{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}'
 )
 
+def _mqtt_html(s):
+    chk     = ' checked' if s.get('mqtt_enabled') else ''
+    hidden  = '' if s.get('mqtt_enabled') else ' style="display:none"'
+    return (
+        '<div class="card"><h2>MQTT</h2>'
+        '<div class="check-row">'
+        '<input type="checkbox" name="mqtt_enabled" id="mqtt_en"' + chk +
+        ' onchange="document.getElementById(\'mqttcfg\').style.display=this.checked?\'\':\'none\';">'
+        '<label for="mqtt_en">Enable MQTT publishing</label>'
+        '</div>'
+        '<div id="mqttcfg"' + hidden + '>'
+        '<label>Broker hostname</label>'
+        '<input type="text" name="mqtt_broker" value="' + s.get('mqtt_broker', '') + '" '
+        'placeholder="xxxx.s1.eu.hivemq.cloud">'
+        '<label>Port (TLS)</label>'
+        '<input type="number" name="mqtt_port" value="' + str(s.get('mqtt_port', 8883)) + '">'
+        '<label>Username</label>'
+        '<input type="text" name="mqtt_user" value="' + s.get('mqtt_user', '') + '">'
+        '<label>Password</label>'
+        '<input type="text" name="mqtt_password" value="' + s.get('mqtt_password', '') + '">'
+        '<label>Topic</label>'
+        '<input type="text" name="mqtt_topic" value="' + s.get('mqtt_topic', 'dakbot/score') + '">'
+        '<p class="note">Requires umqtt.simple on the device. '
+        'Install once: <code>mpremote mip install umqtt.simple</code>. '
+        'Reboot required after changing.</p>'
+        '</div>'
+        '</div>'
+    )
+
+
 def _settings_html(saved=False):
     s = _settings.current
     sports = [
@@ -164,6 +194,9 @@ def _settings_html(saved=False):
         'Reboot required after changing.</p>'
         '</div>'
 
+        # ---- MQTT ------------------------------------------------------------
+        + _mqtt_html(s) +
+
         # ---- Save ------------------------------------------------------------
         '<div class="card"><h2>Save</h2>'
         '<button type="submit" class="btn btn-primary">Save Settings</button>'
@@ -195,14 +228,20 @@ async def _handle_settings_get(writer, saved=False):
 async def _handle_settings_post(writer, body):
     form = _parse_form(body)
     _settings.save({
-        'sport':     form.get('sport', _settings.DEFAULTS['sport']),
-        'use_dhcp':  'use_dhcp' in form,
-        'ip':        form.get('ip',        _settings.current.get('ip', '')),
-        'mask':      form.get('mask',      _settings.current.get('mask', '')),
-        'gateway':   form.get('gateway',   _settings.current.get('gateway', '')),
-        'dns':       form.get('dns',       _settings.current.get('dns', '')),
-        'uart_rx':   int(form.get('uart_rx',   _settings.current.get('uart_rx', 16))),
-        'http_port': int(form.get('http_port', _settings.current.get('http_port', 80))),
+        'sport':         form.get('sport', _settings.DEFAULTS['sport']),
+        'use_dhcp':      'use_dhcp' in form,
+        'ip':            form.get('ip',        _settings.current.get('ip', '')),
+        'mask':          form.get('mask',      _settings.current.get('mask', '')),
+        'gateway':       form.get('gateway',   _settings.current.get('gateway', '')),
+        'dns':           form.get('dns',       _settings.current.get('dns', '')),
+        'uart_rx':       int(form.get('uart_rx',   _settings.current.get('uart_rx', 16))),
+        'http_port':     int(form.get('http_port', _settings.current.get('http_port', 80))),
+        'mqtt_enabled':  'mqtt_enabled' in form,
+        'mqtt_broker':   form.get('mqtt_broker',   _settings.current.get('mqtt_broker', '')),
+        'mqtt_port':     int(form.get('mqtt_port', _settings.current.get('mqtt_port', 8883))),
+        'mqtt_user':     form.get('mqtt_user',     _settings.current.get('mqtt_user', '')),
+        'mqtt_password': form.get('mqtt_password', _settings.current.get('mqtt_password', '')),
+        'mqtt_topic':    form.get('mqtt_topic',    _settings.current.get('mqtt_topic', 'dakbot/score')),
     })
     await _redirect(writer, '/settings?saved=1')
 
