@@ -155,6 +155,7 @@ async def serial_reader_task(dak, sport_config, sport_name):
                     if val == '' and key in webserver.score_data:
                         new_data[key] = webserver.score_data[key]
 
+            new_data['sport'] = sport_name
             webserver.score_data.update(new_data)
 
         except Exception as e:
@@ -188,6 +189,7 @@ async def main():
 
     # 4. Seed score_data so the endpoint always returns valid JSON before first packet
     webserver.score_data = {key: '' for key in sport_config}
+    webserver.score_data['sport'] = sport_name
 
     # 5. Run HTTP server and serial reader concurrently
     await webserver.start(port=settings.current.get('http_port', 80))
