@@ -339,31 +339,49 @@ function render(d) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Config panel wiring
+// Config panel wiring — persisted to localStorage
 // ─────────────────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'dakbot_mqtt_cfg';
+
+function saveCfg(cfg) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+}
+
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS;
+  } catch { return DEFAULTS; }
+}
+
 function getCfg() {
   return {
-    host:  document.getElementById('cfg-host').value.trim()  || DEFAULTS.host,
-    port:  parseInt(document.getElementById('cfg-port').value)|| DEFAULTS.port,
-    user:  document.getElementById('cfg-user').value.trim()  || DEFAULTS.user,
-    pass:  document.getElementById('cfg-pass').value         || DEFAULTS.pass,
-    topic: document.getElementById('cfg-topic').value.trim() || DEFAULTS.topic,
+    host:  document.getElementById('cfg-host').value.trim()   || DEFAULTS.host,
+    port:  parseInt(document.getElementById('cfg-port').value) || DEFAULTS.port,
+    user:  document.getElementById('cfg-user').value.trim()   || DEFAULTS.user,
+    pass:  document.getElementById('cfg-pass').value          || DEFAULTS.pass,
+    topic: document.getElementById('cfg-topic').value.trim()  || DEFAULTS.topic,
   };
 }
 
-function loadDefaults() {
-  document.getElementById('cfg-host').value  = DEFAULTS.host;
-  document.getElementById('cfg-port').value  = DEFAULTS.port;
-  document.getElementById('cfg-user').value  = DEFAULTS.user;
-  document.getElementById('cfg-pass').value  = DEFAULTS.pass;
-  document.getElementById('cfg-topic').value = DEFAULTS.topic;
+function populateForm(cfg) {
+  document.getElementById('cfg-host').value  = cfg.host  || '';
+  document.getElementById('cfg-port').value  = cfg.port  || 8884;
+  document.getElementById('cfg-user').value  = cfg.user  || '';
+  document.getElementById('cfg-pass').value  = cfg.pass  || '';
+  document.getElementById('cfg-topic').value = cfg.topic || 'dakbot/score';
 }
 
-document.getElementById('apply-btn').addEventListener('click', () => connect(getCfg()));
+document.getElementById('apply-btn').addEventListener('click', () => {
+  const cfg = getCfg();
+  saveCfg(cfg);
+  connect(cfg);
+});
 
-// Auto-connect on load if defaults are filled in
-loadDefaults();
-if (DEFAULTS.host) connect(DEFAULTS);
+// On load: restore saved config, auto-connect if host is set
+const saved = loadSaved();
+populateForm(saved);
+if (saved.host) connect(saved);
 else document.getElementById('cfg-panel').open = true;
 </script>
 
