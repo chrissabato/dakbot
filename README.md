@@ -16,8 +16,9 @@ Supported sports: `baseball`, `basketball`, `volleyball`, `football`, `hockeylac
 
 ## Hardware
 
-- [Waveshare ESP32-S3-ETH](https://www.waveshare.com/wiki/ESP32-S3-ETH)
-- AllSport 5000 RTD serial output → **MAX3232 level shifter** → GPIO16
+- [Waveshare ESP32-S3-ETH](https://a.co/d/0aZ7pFHl)
+- [MAX3232 level shifter](https://a.co/d/0iYqtyU6)
+- AllSport 5000 RTD serial output → MAX3232 level shifter → GPIO16
 
 > The AllSport 5000 outputs RS-232 voltage levels (±12 V). A level shifter such as the MAX3232 is required to convert to the 3.3 V logic the ESP32 expects. Connecting RS-232 directly will damage the board.
 
