@@ -89,50 +89,65 @@ def init_ethernet():
 # =============================================================================
 # Score processing
 # =============================================================================
-def _outs_display(out_str):
-    out_str = out_str.strip()
-    if out_str == '3': return '\u26ab\u26ab\u26ab'   # ⚫⚫⚫
-    if out_str == '2': return '\u26ab\u26ab\u26aa'   # ⚫⚫⚪
-    if out_str == '1': return '\u26ab\u26aa\u26aa'   # ⚫⚪⚪
-    if out_str == '0': return '\u26aa\u26aa\u26aa'   # ⚪⚪⚪
-    return ''
-
-
-def _top_bottom(inning_desc):
-    return '\u25bc' if 'bot' in inning_desc.lower() else '\u25b2'   # ▼ / ▲
-
 
 def build_score_dict(dak, sport_config):
+    """Extract all fields from the RTD buffer into a flat dict."""
     data = {}
     for key in sport_config:
         data[key] = dak[key].strip()
+    return data
 
+
+# --- Sport-specific post-processors -----------------------------------------
+# Each function receives the data dict and mutates it in place.
+# Add a new entry here to support additional sports.
+
+def _process_baseball(data):
     if 'HomeAtBat' in data:
         data['HomeAtBat'] = data['HomeAtBat'].replace('<', '>')
 
     ball, strike = data.get('Ball', ''), data.get('Strike', '')
     data['Count'] = '{}-{}'.format(ball, strike) if ball and strike else ''
 
-    data['Outs'] = _outs_display(data.get('Out', ''))
+    out_str = data.get('Out', '').strip()
+    data['Outs'] = (
+        '\u26ab\u26ab\u26ab' if out_str == '3' else   # ⚫⚫⚫
+        '\u26ab\u26ab\u26aa' if out_str == '2' else   # ⚫⚫⚪
+        '\u26ab\u26aa\u26aa' if out_str == '1' else   # ⚫⚪⚪
+        '\u26aa\u26aa\u26aa' if out_str == '0' else   # ⚪⚪⚪
+        ''
+    )
 
-    tb = _top_bottom(data.get('InningDescription', ''))
+    tb = '\u25bc' if 'bot' in data.get('InningDescription', '').lower() else '\u25b2'
     data['TB']     = tb
     data['top']    = '\u25b2' if tb == '\u25b2' else ''
     data['bottom'] = '\u25bc' if tb == '\u25bc' else ''
 
-    return data
+
+_SPORT_PROCESSORS = {
+    'baseball': _process_baseball,
+    # 'basketball': _process_basketball,
+    # 'football':   _process_football,
+}
+
+
+def apply_sport_processing(data, sport_name):
+    processor = _SPORT_PROCESSORS.get(sport_name)
+    if processor:
+        processor(data)
 
 
 # =============================================================================
 # Async tasks
 # =============================================================================
-async def serial_reader_task(dak, sport_config):
+async def serial_reader_task(dak, sport_config, sport_name):
     """Read RTD packets continuously, yield between bytes for HTTP responsiveness."""
     print('Serial reader started')
     while True:
         try:
             await dak.update()
             new_data = build_score_dict(dak, sport_config)
+            apply_sport_processing(new_data, sport_name)
 
             # Keep last known non-empty value for fields that report blank mid-packet
             for key, val in new_data.items():
@@ -177,7 +192,7 @@ async def main():
     # 5. Run HTTP server and serial reader concurrently
     await webserver.start(port=settings.current.get('http_port', 80))
 
-    tasks = [asyncio.create_task(serial_reader_task(dak, sport_config))]
+    tasks = [asyncio.create_task(serial_reader_task(dak, sport_config, sport_name))]
 
     # 6. Optionally start MQTT publisher
     if settings.current.get('mqtt_enabled'):
