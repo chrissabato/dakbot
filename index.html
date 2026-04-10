@@ -164,6 +164,12 @@
   </p>
 </details>
 
+<!-- ── Raw data debug ──────────────────────────────────────────────────── -->
+<details id="debug-panel" style="width:100%;max-width:540px;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:.75rem 1rem;font-size:.85rem;">
+  <summary style="cursor:pointer;font-weight:600;opacity:.6;user-select:none;">Raw MQTT data</summary>
+  <pre id="raw-json" style="margin-top:.75rem;font-size:.75rem;color:#8b949e;white-space:pre-wrap;word-break:break-all;">No data received yet.</pre>
+</details>
+
 <!-- ── MQTT.js ─────────────────────────────────────────────────────────── -->
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
@@ -236,7 +242,9 @@ function connect(cfg) {
 
   mqttClient.on('message', (_topic, payload) => {
     try {
-      const data = JSON.parse(payload.toString());
+      const raw = payload.toString();
+      const data = JSON.parse(raw);
+      document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
       lastData = data;
       render(data);
       setStatus('live', 'Live');
@@ -293,21 +301,14 @@ function render(d) {
 
   const awayName  = e('div', 'team-name', d.AwayTeamName  || 'AWAY');
   const awayScore = e('div', 'team-score', d.AwayTeamScore || '–');
-  const div       = e('div', 'divider', ':');
   const homeScore = e('div', 'team-score', d.HomeTeamScore || '–');
   const homeName  = e('div', 'team-name', d.HomeTeamName  || 'HOME');
 
-  // Highlight leading team score
-  if (d.AwayTeamScore > d.HomeTeamScore) awayScore.style.color = '#4ade80';
-  if (d.HomeTeamScore > d.AwayTeamScore) homeScore.style.color = '#4ade80';
+  // Highlight leading team score (numeric comparison)
+  if (parseInt(d.AwayTeamScore) > parseInt(d.HomeTeamScore)) awayScore.style.color = '#4ade80';
+  if (parseInt(d.HomeTeamScore) > parseInt(d.AwayTeamScore)) homeScore.style.color = '#4ade80';
 
-  teams.append(awayName, awayScore, div, homeScore);
-  // home name goes last in 4-col grid
-  teams.append(e('div')); // spacer for col 4 alignment
-  teams.append(homeName);
-  // Rebuild to correct grid layout: away-name | away-score | home-score | home-name
-  teams.innerHTML = '';
-  [awayName, awayScore, homeScore, homeName].forEach(el => teams.appendChild(el));
+  teams.append(awayName, awayScore, homeScore, homeName);
   $board.appendChild(teams);
 
   // ── Clock / period ─────────────────────────────────────────────────────── //
