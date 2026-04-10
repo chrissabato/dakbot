@@ -97,6 +97,24 @@
   .detail-item .dk { opacity: .5; }
   .detail-item .dv { font-weight: 600; }
 
+  /* ── Football situation row ─────────────────────────────────────────────── */
+  .situation {
+    display: flex; align-items: center; justify-content: center; gap: 1.2rem;
+    border-top: 1px solid #21262d; padding-top: 1rem;
+  }
+  .down-distance { font-size: 1.6rem; font-weight: 800; }
+  .ball-on { font-size: 1rem; opacity: .7; }
+
+  /* ── Baseball H/E/LOB table ─────────────────────────────────────────────── */
+  .hel-table {
+    width: 100%; border-collapse: collapse;
+    border-top: 1px solid #21262d; margin-top: .5rem; font-size: .85rem;
+  }
+  .hel-table th, .hel-table td { padding: .35rem .6rem; text-align: center; }
+  .hel-table th { opacity: .5; font-weight: 600; font-size: .75rem; text-transform: uppercase; }
+  .hel-table td:first-child { text-align: left; font-weight: 700; opacity: .8; }
+  .hel-table tr:nth-child(even) { background: rgba(255,255,255,.03); }
+
   /* ── Empty / no-data state ──────────────────────────────────────────────── */
   #no-data {
     opacity: .4; text-align: center; font-size: .9rem; line-height: 1.6;
@@ -264,16 +282,16 @@ function connect(cfg) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Rendering
+// Rendering helpers
 // ─────────────────────────────────────────────────────────────────────────────
 function e(tag, cls, text) {
   const el = document.createElement(tag);
-  if (cls)  el.className   = cls;
+  if (cls)  el.className = cls;
   if (text !== undefined) el.textContent = text;
   return el;
 }
 
-function kv(label, value) {
+function pill(label, value) {
   if (value === '' || value === null || value === undefined) return null;
   const d = e('div', 'detail-item');
   d.appendChild(e('span', 'dk', label));
@@ -281,61 +299,166 @@ function kv(label, value) {
   return d;
 }
 
-// Fields that get their own prominent row vs. the detail pill grid
-const PRIMARY_KEYS = new Set([
-  'HomeTeamName', 'AwayTeamName', 'HomeTeamScore', 'AwayTeamScore',
-  'Clock', 'Period', 'Quarter', 'Inning', 'InningText',
-]);
-// Fields to skip entirely in the detail grid (shown in the primary area or derived)
-const SKIP_KEYS = new Set([
-  ...PRIMARY_KEYS,
-  'TB', 'top', 'bottom', 'Outs', 'Count',
-  'InningDescription',
-]);
+function pills(board, items) {
+  const row = e('div', 'details');
+  for (const [label, value] of items) {
+    const p = pill(label, value);
+    if (p) row.appendChild(p);
+  }
+  if (row.children.length) board.appendChild(row);
+}
+
+// hockeylacrosse field names have a numeric prefix — strip it for lookup
+function norm(d) {
+  const out = {};
+  for (const [k, v] of Object.entries(d)) {
+    out[k.replace(/^\d+/, '')] = v;
+  }
+  return out;
+}
+
+// Shared teams/score header
+function renderHeader(board, awayName, awayScore, homeScore, homeName) {
+  const teams = e('div', 'teams');
+  const an = e('div', 'team-name', awayName || 'AWAY');
+  const as = e('div', 'team-score', awayScore || '–');
+  const hs = e('div', 'team-score', homeScore || '–');
+  const hn = e('div', 'team-name', homeName  || 'HOME');
+  if (parseInt(awayScore) > parseInt(homeScore)) as.style.color = '#4ade80';
+  if (parseInt(homeScore) > parseInt(awayScore)) hs.style.color = '#4ade80';
+  teams.append(an, as, hs, hn);
+  board.appendChild(teams);
+}
+
+// Shared clock/period row
+function renderMeta(board, period, clock) {
+  if (!period && !clock) return;
+  const meta = e('div', 'meta');
+  if (period) meta.appendChild(e('span', null, period));
+  if (clock)  meta.appendChild(e('span', 'clock', clock));
+  board.appendChild(meta);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sport renderers
+// ─────────────────────────────────────────────────────────────────────────────
+function renderBaseball(board, d) {
+  renderHeader(board, d.AwayTeamName, d.AwayTeamScore, d.HomeTeamScore, d.HomeTeamName);
+
+  // Inning situation
+  const inning = (d.InningDescription || '').trim() || (d.InningText || '').trim();
+  if (inning) {
+    const meta = e('div', 'meta');
+    meta.appendChild(e('span', null, inning));
+    board.appendChild(meta);
+  }
+
+  // Count & outs
+  pills(board, [
+    ['Count', d.Count],
+    ['Outs',  d.Outs],
+    ['Ball',  d.Ball],
+    ['Strike', d.Strike],
+    ['Out',   d.Out],
+  ]);
+
+  // H / E / LOB table
+  const awayH = d.AwayHits, awayE = d.AwayErrors, awayL = d.AwayLeftonBase;
+  const homeH = d.HomeHits, homeE = d.HomeErrors, homeL = d.HomeLeftonBase;
+  if (awayH || homeH) {
+    const tbl = document.createElement('table');
+    tbl.className = 'hel-table';
+    tbl.innerHTML =
+      '<tr><th></th><th>H</th><th>E</th><th>LOB</th></tr>' +
+      `<tr><td>${d.AwayTeamAbbreviation||'AWAY'}</td><td>${awayH||'–'}</td><td>${awayE||'–'}</td><td>${awayL||'–'}</td></tr>` +
+      `<tr><td>${d.HomeTeamAbbreviation||'HOME'}</td><td>${homeH||'–'}</td><td>${homeE||'–'}</td><td>${homeL||'–'}</td></tr>`;
+    board.appendChild(tbl);
+  }
+}
+
+function renderBasketball(board, d) {
+  renderHeader(board, d.AwayTeamName, d.AwayTeamScore, d.HomeTeamScore, d.HomeTeamName);
+  renderMeta(board, d.GameText, d['MainClockTime[mm:ss.t]'] || d['MainClockTime[mm:ssss.t]']);
+  pills(board, [
+    ['Away Fouls', d.AwayTeamFouls],
+    ['Away Bonus', d.AwayBonusText],
+    ['Home Fouls', d.HomeTeamFouls],
+    ['Home Bonus', d.HomeBonusText],
+    ['Shot Clock', d.ShotClockTime],
+  ]);
+}
+
+function renderFootball(board, d) {
+  renderHeader(board, d.AwayTeamName, d.AwayTeamScore, d.HomeTeamScore, d.HomeTeamName);
+  renderMeta(board, d.QuarterText, d['MainClockTime[mm:ss.t]'] || d['MainClockTime[mm:ssss.t]']);
+
+  // Down & distance situation
+  const down = (d.Down || '').trim(), togo = (d.ToGo || '').trim(), ballon = (d.BallOn || '').trim();
+  if (down || togo || ballon) {
+    const sit = e('div', 'situation');
+    if (down && togo) sit.appendChild(e('span', 'down-distance', `${down} & ${togo}`));
+    if (ballon)       sit.appendChild(e('span', 'ball-on', `Ball on ${ballon}`));
+    board.appendChild(sit);
+  }
+
+  // Possession & yards
+  const awayPoss = (d.AwayPossessionText || '').trim();
+  const homePoss = (d.HomePossessionText || '').trim();
+  pills(board, [
+    ['Possession', awayPoss ? d.AwayTeamAbbreviation || 'Away' : homePoss ? d.HomeTeamAbbreviation || 'Home' : null],
+    ['Play Clock', d.PlayClockTime],
+  ]);
+}
+
+function renderVolleyball(board, d) {
+  renderHeader(board, d.AwayTeamName, d.AwayTeamScore, d.HomeTeamScore, d.HomeTeamName);
+  renderMeta(board, d.GameText, null);
+
+  // Sets won
+  const awayW = (d.AwayGamesWon || '').trim(), homeW = (d.HomeGamesWon || '').trim();
+  if (awayW || homeW) {
+    const meta = e('div', 'meta');
+    meta.style.fontSize = '1rem';
+    meta.appendChild(e('span', null, `Sets: ${awayW||'0'} – ${homeW||'0'}`));
+    board.appendChild(meta);
+  }
+
+  // Serve indicator
+  const awayServe = (d.AwayServeText || '').trim();
+  const homeServe = (d.HomeServeText || '').trim();
+  pills(board, [
+    ['Serving', awayServe ? (d.AwayTeamAbbreviation || 'Away') : homeServe ? (d.HomeTeamAbbreviation || 'Home') : null],
+  ]);
+}
+
+function renderHockey(board, d) {
+  // Strip numeric prefixes so field names match other sports
+  const n = norm(d);
+  renderHeader(board, n.AwayTeamName, n.AwayTeamScore, n.HomeTeamScore, n.HomeTeamName);
+  renderMeta(board, n.PeriodText, n['MainClockTime(mm:ss.t)'] || n['MainClockTime(mm:ssss.t)']);
+  pills(board, [
+    ['Away Shots', n['AwayShotsOnGoal-Total']],
+    ['Home Shots', n['HomeShotsOnGoal-Total']],
+    ['Away Saves', n['AwaySaves-Total']],
+    ['Home Saves', n['HomeSaves-Total']],
+  ]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dispatch
+// ─────────────────────────────────────────────────────────────────────────────
+const SPORT_RENDERERS = {
+  baseball:       renderBaseball,
+  basketball:     renderBasketball,
+  football:       renderFootball,
+  volleyball:     renderVolleyball,
+  hockeylacrosse: renderHockey,
+};
 
 function render(d) {
   $board.innerHTML = '';
-
-  // ── Teams ──────────────────────────────────────────────────────────────── //
-  const teams = e('div', 'teams');
-
-  const awayName  = e('div', 'team-name', d.AwayTeamName  || 'AWAY');
-  const awayScore = e('div', 'team-score', d.AwayTeamScore || '–');
-  const homeScore = e('div', 'team-score', d.HomeTeamScore || '–');
-  const homeName  = e('div', 'team-name', d.HomeTeamName  || 'HOME');
-
-  // Highlight leading team score (numeric comparison)
-  if (parseInt(d.AwayTeamScore) > parseInt(d.HomeTeamScore)) awayScore.style.color = '#4ade80';
-  if (parseInt(d.HomeTeamScore) > parseInt(d.AwayTeamScore)) homeScore.style.color = '#4ade80';
-
-  teams.append(awayName, awayScore, homeScore, homeName);
-  $board.appendChild(teams);
-
-  // ── Clock / period ─────────────────────────────────────────────────────── //
-  const clock  = d.Clock   || d.GameClock || '';
-  const period = d.Period  || d.Quarter   || d.InningText || '';
-  if (clock || period) {
-    const meta = e('div', 'meta');
-    if (period) meta.appendChild(e('span', null, period));
-    if (clock)  meta.appendChild(e('span', 'clock', clock));
-    if (d.InningDescription) meta.appendChild(e('span', null, d.InningDescription));
-    $board.appendChild(meta);
-  }
-
-  // ── Detail pills ───────────────────────────────────────────────────────── //
-  const details = e('div', 'details');
-
-  // Baseball specials first
-  if (d.Count)  details.appendChild(kv('Count', d.Count));
-  if (d.Outs)   details.appendChild(kv('Outs',  d.Outs));
-
-  for (const [k, v] of Object.entries(d)) {
-    if (SKIP_KEYS.has(k)) continue;
-    const item = kv(k, v);
-    if (item) details.appendChild(item);
-  }
-
-  if (details.children.length) $board.appendChild(details);
+  const fn = SPORT_RENDERERS[d.sport] || renderBaseball;
+  fn($board, d);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
