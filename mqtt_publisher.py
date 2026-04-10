@@ -1,9 +1,9 @@
 # =============================================================================
 # mqtt_publisher.py — Async MQTT publisher for scoreboard data
 #
-# Connects to an MQTT broker over TLS (port 8883) and publishes score_data
-# as JSON whenever it changes.  Pings every 30 s to maintain the keepalive.
-# Reconnects automatically on failure.
+# Publishes score_data immediately when signalled by serial_reader_task via
+# an asyncio.Event, rather than polling on a timer.  Pings every 30 s to
+# maintain the broker keepalive.  Reconnects automatically on failure.
 #
 # Requires umqtt.simple — install once with:
 #   mpremote mip install umqtt.simple
@@ -14,37 +14,35 @@ import ujson
 import ssl
 import settings as _settings
 
-# Shared reference — main.py sets this after webserver.score_data is live
-score_ref = None
+# Event set by serial_reader_task whenever score_data changes
+data_ready = asyncio.Event()
 
 
 def _make_client():
     from umqtt.simple import MQTTClient
     s = _settings.current
     ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ssl_ctx.verify_mode = ssl.CERT_NONE          # broker cert not verified (HiveMQ Cloud is valid CA-signed)
+    ssl_ctx.verify_mode = ssl.CERT_NONE
     client = MQTTClient(
-        client_id   = b'dakbot',
-        server      = s['mqtt_broker'].encode(),
-        port        = s.get('mqtt_port', 8883),
-        user        = s['mqtt_user'].encode()     if s.get('mqtt_user')     else None,
-        password    = s['mqtt_password'].encode() if s.get('mqtt_password') else None,
-        keepalive   = 60,
-        ssl         = ssl_ctx,
+        client_id = b'dakbot',
+        server    = s['mqtt_broker'].encode(),
+        port      = s.get('mqtt_port', 8883),
+        user      = s['mqtt_user'].encode()     if s.get('mqtt_user')     else None,
+        password  = s['mqtt_password'].encode() if s.get('mqtt_password') else None,
+        keepalive = 60,
+        ssl       = ssl_ctx,
     )
     return client
 
 
 async def run(get_score):
     """
-    Async task.  get_score is a callable that returns the current score dict.
-    Loop forever: connect, publish on change, ping to stay alive, reconnect on error.
+    Async task.  Waits on data_ready event (set by serial_reader_task on each
+    new RTD packet), publishes immediately, then waits again.  A separate ping
+    task keeps the broker connection alive every 30 s.
     """
-    s            = _settings.current
-    topic        = s.get('mqtt_topic', 'dakbot/score').encode()
-    last_payload = None
-    client       = None
-
+    s     = _settings.current
+    topic = s.get('mqtt_topic', 'dakbot/score').encode()
     print('MQTT publisher starting — broker:', s.get('mqtt_broker'))
 
     while True:
@@ -59,9 +57,19 @@ async def run(get_score):
             continue
 
         # --- Publish loop ---------------------------------------------------
-        ping_counter = 0
+        last_payload = None
+        last_ping    = asyncio.ticks_ms()
+
         try:
             while True:
+                # Wait for new data (or wake every 5 s to check ping deadline)
+                try:
+                    await asyncio.wait_for_ms(data_ready.wait(), 5000)
+                    data_ready.clear()
+                except asyncio.TimeoutError:
+                    pass
+
+                # Publish if data changed
                 score = get_score()
                 if score:
                     payload = ujson.dumps(score).encode()
@@ -69,13 +77,11 @@ async def run(get_score):
                         client.publish(topic, payload, retain=True)
                         last_payload = payload
 
-                # Ping every 30 s (called every 1 s, so every 30 iterations)
-                ping_counter += 1
-                if ping_counter >= 30:
+                # Ping every 30 s
+                now = asyncio.ticks_ms()
+                if asyncio.ticks_diff(now, last_ping) >= 30_000:
                     client.ping()
-                    ping_counter = 0
-
-                await asyncio.sleep(1)
+                    last_ping = now
 
         except Exception as e:
             print('MQTT error:', e)

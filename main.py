@@ -140,9 +140,10 @@ def apply_sport_processing(data, sport_name):
 # =============================================================================
 # Async tasks
 # =============================================================================
-async def serial_reader_task(dak, sport_config, sport_name):
+async def serial_reader_task(dak, sport_config, sport_name, mqtt_enabled=False):
     """Read RTD packets continuously, yield between bytes for HTTP responsiveness."""
     print('Serial reader started')
+    _mqtt_enabled = mqtt_enabled
     while True:
         try:
             await dak.update()
@@ -157,6 +158,11 @@ async def serial_reader_task(dak, sport_config, sport_name):
 
             new_data['sport'] = sport_name
             webserver.score_data.update(new_data)
+
+            # Signal MQTT publisher that fresh data is available
+            if _mqtt_enabled:
+                import mqtt_publisher
+                mqtt_publisher.data_ready.set()
 
         except Exception as e:
             print('Serial reader error:', e)
@@ -194,10 +200,11 @@ async def main():
     # 5. Run HTTP server and serial reader concurrently
     await webserver.start(port=settings.current.get('http_port', 80))
 
-    tasks = [asyncio.create_task(serial_reader_task(dak, sport_config, sport_name))]
+    mqtt_enabled = bool(settings.current.get('mqtt_enabled'))
+    tasks = [asyncio.create_task(serial_reader_task(dak, sport_config, sport_name, mqtt_enabled))]
 
     # 6. Optionally start MQTT publisher
-    if settings.current.get('mqtt_enabled'):
+    if mqtt_enabled:
         import mqtt_publisher
         tasks.append(asyncio.create_task(
             mqtt_publisher.run(lambda: webserver.score_data)
