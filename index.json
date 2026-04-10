@@ -1,0 +1,11 @@
+{
+    "football":{
+        "MainClockTime[mm:ssss.t]":"Clock",
+        "QuarterText":"Quarter",
+        "AwayTeamScore":"Away Score",
+        "HomeTeamScore":"Home Score",
+        "Down":"Down",
+        "ToGo":"To Go",
+        "BallOn":"Ball On",
+    }
+}
