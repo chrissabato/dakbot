@@ -207,7 +207,7 @@ Example response (baseball):
 | `daktronics.py` | Async RTD serial parser (machine.UART) |
 | `webserver.py` | Minimal async HTTP server (uasyncio) |
 | `mqtt_publisher.py` | Optional async MQTT publisher (TLS, port 8883) |
-| `client.html` | Browser scoreboard — connects via MQTT WebSocket (WSS, port 8884) |
+| `index.html` | Browser scoreboard — connects via MQTT WebSocket (WSS, port 8884); hosted at [chrissabato.github.io/dakbot](https://chrissabato.github.io/dakbot) |
 | `config.py` | Hardware pin constants (PCB-fixed, do not change) |
 | `settings.py` | Persistent user settings — loads/saves `settings.json` on flash |
 | `daksports.json` | Field name → [position, length] mappings per sport |
