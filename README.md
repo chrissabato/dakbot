@@ -31,13 +31,14 @@ The AllSport 5000 has a DB25 male RTD output. Wire it to a DB9 female connector 
 | Pin 2 | Pin 3 | TX → RX |
 | Pin 3 | Pin 2 | RX → TX (unused — receive only) |
 
-### Wiring
+### ESP Wiring
 
-| AllSport 5000 | MAX3232 | ESP32-S3-ETH |
-|---|---|---|
-| RTD TX (RS-232 out, DB9 pin 3) | R1IN | — |
-| GND (DB9 pin 5) | GND | GND |
-| — | R1OUT | GPIO16 (UART RX) |
+| MAX3232 | ESP32-S3-ETH |
+|---|---|
+| ACC | 3V3 |
+| GND | GND |
+| R1OUT | GPIO16 (UART RX) |
+| R1IN | — |
 
 GPIO17 is configured as UART TX but left unconnected — the AllSport link is receive-only.
 
@@ -107,16 +108,13 @@ Press `Ctrl+X` to exit. If it prints `False`, try the `ESP32_GENERIC_S3-SPIRAM` 
 
 ### 6. Copy the project files
 
-From inside the `dakbot` repo folder:
+From inside the `dakbot` repo folder, use the included script:
 
 ```bash
-mpremote connect PORT cp config.py :config.py
-mpremote connect PORT cp settings.py :settings.py
-mpremote connect PORT cp daktronics.py :daktronics.py
-mpremote connect PORT cp webserver.py :webserver.py
-mpremote connect PORT cp main.py :main.py
-mpremote connect PORT cp daksports.json :daksports.json
+./flash.sh PORT
 ```
+
+Replace `PORT` with your serial port (e.g. `/dev/ttyACM0`). The script copies all required files and exits with an error if any transfer fails.
 
 ### 7. Boot and verify
 
