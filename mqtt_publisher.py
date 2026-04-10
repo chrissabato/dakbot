@@ -12,6 +12,7 @@
 import uasyncio as asyncio
 import ujson
 import ssl
+import utime
 import settings as _settings
 
 # Event set by serial_reader_task whenever score_data changes
@@ -58,13 +59,13 @@ async def run(get_score):
 
         # --- Publish loop ---------------------------------------------------
         last_payload = None
-        last_ping    = asyncio.ticks_ms()
+        last_ping    = utime.ticks_ms()
 
         try:
             while True:
                 # Wait for new data (or wake every 5 s to check ping deadline)
                 try:
-                    await asyncio.wait_for_ms(data_ready.wait(), 5000)
+                    await asyncio.wait_for(data_ready.wait(), 5)
                     data_ready.clear()
                 except asyncio.TimeoutError:
                     pass
@@ -78,8 +79,8 @@ async def run(get_score):
                         last_payload = payload
 
                 # Ping every 30 s
-                now = asyncio.ticks_ms()
-                if asyncio.ticks_diff(now, last_ping) >= 30_000:
+                now = utime.ticks_ms()
+                if utime.ticks_diff(now, last_ping) >= 30_000:
                     client.ping()
                     last_ping = now
 
