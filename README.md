@@ -21,12 +21,22 @@ Supported sports: `baseball`, `basketball`, `volleyball`, `football`, `hockeylac
 
 > The AllSport 5000 outputs RS-232 voltage levels (±12 V). A level shifter such as the MAX3232 is required to convert to the 3.3 V logic the ESP32 expects. Connecting RS-232 directly will damage the board.
 
+### Serial cable
+
+The AllSport 5000 has a DB25 male RTD output. Wire it to a DB9 female connector for a standard MAX3232 module:
+
+| AllSport 5000 DB25 Male | DB9 Female | Signal |
+|---|---|---|
+| Pin 7 | Pin 5 | GND |
+| Pin 2 | Pin 3 | TX → RX |
+| Pin 3 | Pin 2 | RX → TX (unused — receive only) |
+
 ### Wiring
 
 | AllSport 5000 | MAX3232 | ESP32-S3-ETH |
 |---|---|---|
-| RTD TX (RS-232 out) | R1IN | — |
-| GND | GND | GND |
+| RTD TX (RS-232 out, DB9 pin 3) | R1IN | — |
+| GND (DB9 pin 5) | GND | GND |
 | — | R1OUT | GPIO16 (UART RX) |
 
 GPIO17 is configured as UART TX but left unconnected — the AllSport link is receive-only.
