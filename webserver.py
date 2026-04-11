@@ -4,18 +4,21 @@
 # Endpoints:
 #   GET  /            → live scoreboard JSON
 #   GET  /data        → same (alias)
-#   GET  /health      → {"status":"ok"}
-#   GET  /settings    → settings form (HTML)
+#   GET  /settings    → settings form + device status (temp, RAM, uptime, IP)
 #   POST /settings    → save settings to flash, redirect back
 #   POST /reboot      → reboot the device
+#   POST /update      → OTA update from GitHub
 # =============================================================================
 
 import uasyncio as asyncio
 import ujson
 import machine
+import utime
 import settings as _settings
 
 score_data = {}
+device_ip  = '—'          # set by main.py after Ethernet connects
+_boot_ms   = utime.ticks_ms()
 
 # =============================================================================
 # Helpers
@@ -95,6 +98,42 @@ _CSS = (
     '.banner{padding:.75rem 1rem;border-radius:6px;margin-bottom:1rem;font-size:.875rem}'
     '.ok{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}'
 )
+
+def _dashboard_html():
+    import gc
+    gc.collect()
+    try:
+        import esp32
+        temp = '{}\u00b0C'.format(esp32.mcu_temperature())
+    except Exception:
+        temp = '—'
+    uptime_s  = utime.ticks_diff(utime.ticks_ms(), _boot_ms) // 1000
+    h, rem    = divmod(uptime_s, 3600)
+    m, sec    = divmod(rem, 60)
+    uptime    = '{}h {}m {}s'.format(h, m, sec)
+    free_kb   = gc.mem_free()  // 1024
+    total_kb  = (gc.mem_free() + gc.mem_alloc()) // 1024
+    sport     = score_data.get('sport', '—')
+
+    def row(label, value):
+        return (
+            '<span style="opacity:.55">{}</span>'
+            '<span style="font-weight:500">{}</span>'
+        ).format(label, value)
+
+    return (
+        '<div class="card"><h2>Device Status</h2>'
+        '<div style="display:grid;grid-template-columns:auto 1fr;gap:.5rem .75rem;font-size:.875rem">'
+        + row('IP Address', device_ip)
+        + row('Sport',      sport)
+        + row('MCU Temp',   temp)
+        + row('Free RAM',   '{} KB / {} KB'.format(free_kb, total_kb))
+        + row('Uptime',     uptime)
+        + '</div>'
+        '<p class="note" style="margin-top:.75rem">Reload the page to refresh.</p>'
+        '</div>'
+    )
+
 
 def _mqtt_html(s):
     chk     = ' checked' if s.get('mqtt_enabled') else ''
@@ -203,6 +242,9 @@ def _settings_html(saved=False):
         '<p class="note">Network and pin changes require a reboot to take effect.</p>'
         '</div>'
         '</form>'
+
+        # ---- Dashboard -------------------------------------------------------
+        + _dashboard_html() +
 
         # ---- Reboot / Update -------------------------------------------------
         '<form method="POST" action="/reboot"'
@@ -337,14 +379,6 @@ async def _handle_client(reader, writer):
 
         if base in ('/', '/data'):
             await _send(writer, b'200 OK', b'application/json', ujson.dumps(score_data))
-        elif base == '/health':
-            try:
-                import esp32
-                temp = esp32.mcu_temperature()
-            except Exception:
-                temp = None
-            health = {'status': 'ok', 'mcu_temp_c': temp}
-            await _send(writer, b'200 OK', b'application/json', ujson.dumps(health))
         elif base == '/settings' and method == 'GET':
             await _handle_settings_get(writer, saved=saved)
         elif base == '/settings' and method == 'POST':

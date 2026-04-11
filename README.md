@@ -177,7 +177,7 @@ Settings are persisted to `settings.json` on the device flash and survive reboot
 |---|---|---|
 | `/` | GET | Live scoreboard JSON |
 | `/data` | GET | Same (alias) |
-| `/health` | GET | `{"status":"ok"}` |
+| `/settings` | GET | Settings UI + device status dashboard (temp, RAM, uptime) |
 | `/settings` | GET | Settings UI (HTML) |
 | `/settings` | POST | Save settings to flash |
 | `/reboot` | POST | Reboot device |

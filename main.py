@@ -80,6 +80,7 @@ def init_ethernet():
 
     if nic.isconnected():
         print('Ethernet connected:', nic.ifconfig())
+        webserver.device_ip = nic.ifconfig()[0]
     else:
         print('WARNING: Ethernet not connected — check wiring / settings')
 
