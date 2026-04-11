@@ -299,38 +299,33 @@ async def _handle_settings_post(writer, body):
     await _redirect(writer, '/settings?saved=1')
 
 
-async def _handle_update(writer):
+async def _do_update():
+    """Background task: run updater then reboot. Runs after response is sent."""
+    await asyncio.sleep_ms(500)   # ensure response is flushed first
     import updater
-    results = updater.update_all()
+    updater.update_all()
+    machine.reset()
 
-    rows = ''
-    for filename, ok, detail in results:
-        icon  = '\u2713' if ok else '\u2717'   # ✓ / ✗
-        color = '#166534' if ok else '#991b1b'
-        info  = '{} bytes'.format(detail) if ok else str(detail)
-        rows += '<tr><td style="color:{}">{}</td><td>{}</td><td style="opacity:.6;font-size:.8rem">{}</td></tr>'.format(
-            color, icon, filename, info)
 
+async def _handle_update(writer):
+    # Send the response immediately — the actual download happens in a background
+    # task so the event loop is free to flush the response before blocking I/O starts.
     body = (
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<style>body{font-family:sans-serif;background:#f0f2f5;padding:1rem;max-width:520px;margin:0 auto}'
-        '.card{background:#fff;border-radius:8px;padding:1.25rem;margin-bottom:1rem;box-shadow:0 1px 3px rgba(0,0,0,.1)}'
-        'table{width:100%;border-collapse:collapse;font-size:.875rem}'
-        'td{padding:.4rem .5rem;border-bottom:1px solid #eee}'
-        '.btn{display:inline-block;padding:.6rem 1.4rem;border:none;border-radius:6px;'
-        'font-size:.9rem;font-weight:600;cursor:pointer;background:#2563eb;color:#fff}'
-        '.btn-danger{background:#dc2626}'
+        '<meta http-equiv="refresh" content="45;url=/settings">'
+        '<style>body{font-family:sans-serif;background:#f0f2f5;padding:2rem;'
+        'max-width:520px;margin:0 auto;text-align:center}'
+        'h2{margin-bottom:1rem}.note{color:#666;font-size:.9rem;line-height:1.6}'
         '</style></head><body>'
-        '<h1 style="font-size:1.3rem;margin-bottom:1rem">Firmware Update</h1>'
-        '<div class="card"><table>' + rows + '</table></div>'
-        '<form method="POST" action="/reboot">'
-        '<button class="btn btn-danger">Reboot to apply</button>'
-        '</form>'
-        '&nbsp;<a href="/settings" style="margin-left:1rem;font-size:.9rem">Back to settings</a>'
+        '<h2>Updating firmware\u2026</h2>'
+        '<p class="note">Downloading files from GitHub and writing to flash.<br>'
+        'The device will reboot automatically when complete.<br>'
+        'This page will redirect to settings in ~45 seconds.</p>'
         '</body></html>'
     )
     await _send(writer, b'200 OK', b'text/html; charset=utf-8', body)
+    asyncio.create_task(_do_update())
 
 
 async def _handle_reboot(writer):
