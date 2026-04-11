@@ -198,6 +198,7 @@ def _settings_html(saved=False):
         '</head><body>'
         '<h1>Dakbot Settings</h1>'
         + banner +
+        + _dashboard_html() +
 
         # ---- Sport -----------------------------------------------------------
         '<form method="POST" action="/settings">'
@@ -244,9 +245,6 @@ def _settings_html(saved=False):
         '<p class="note">Network and pin changes require a reboot to take effect.</p>'
         '</div>'
         '</form>'
-
-        # ---- Dashboard -------------------------------------------------------
-        + _dashboard_html() +
 
         # ---- Reboot / Update -------------------------------------------------
         '<form method="POST" action="/reboot"'
