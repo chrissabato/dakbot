@@ -267,7 +267,7 @@ def _settings_html(saved=False):
         '<script>'
         '(function(){'
         'var cur=' + str(_version.VERSION) + ';'
-        'fetch("https://raw.githubusercontent.com/chrissabato/dakbot/main/version.py")'
+        'fetch("https://raw.githubusercontent.com/chrissabato/dakbot/main/version.py?_="+Date.now())'
         '.then(function(r){return r.text();})'
         '.then(function(t){'
         'var m=t.match(/VERSION\\s*=\\s*(\\d+)/);'
