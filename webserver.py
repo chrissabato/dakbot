@@ -197,7 +197,7 @@ def _settings_html(saved=False):
         '<style>' + _CSS + '</style>'
         '</head><body>'
         '<h1>Dakbot Settings</h1>'
-        + banner +
+        + banner
         + _dashboard_html() +
 
         # ---- Sport -----------------------------------------------------------
