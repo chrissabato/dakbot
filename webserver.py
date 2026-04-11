@@ -293,7 +293,13 @@ async def _handle_client(reader, writer):
         if base in ('/', '/data'):
             await _send(writer, b'200 OK', b'application/json', ujson.dumps(score_data))
         elif base == '/health':
-            await _send(writer, b'200 OK', b'application/json', '{"status":"ok"}')
+            try:
+                import esp32
+                temp = esp32.mcu_temperature()
+            except Exception:
+                temp = None
+            health = {'status': 'ok', 'mcu_temp_c': temp}
+            await _send(writer, b'200 OK', b'application/json', ujson.dumps(health))
         elif base == '/settings' and method == 'GET':
             await _handle_settings_get(writer, saved=saved)
         elif base == '/settings' and method == 'POST':
