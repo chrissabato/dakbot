@@ -127,7 +127,7 @@ def _dashboard_html():
         '<div style="display:grid;grid-template-columns:auto 1fr;gap:.5rem .75rem;font-size:.875rem">'
         + row('IP Address', device_ip)
         + row('Sport',      sport)
-        + row('Version',    str(_version.VERSION))
+        + row('Version', '<span id="dash-ver">' + str(_version.VERSION) + '</span>')
         + row('MCU Temp',   temp)
         + row('Free RAM',   '{} KB / {} KB'.format(free_kb, total_kb))
         + row('Uptime',     uptime)
@@ -276,7 +276,12 @@ def _settings_html(saved=False):
         'var msg=document.getElementById("ver-status");'
         'var form=document.getElementById("update-form");'
         'if(latest===null){msg.textContent="Could not parse version. Raw: "+t.slice(0,80);form.style.display="";}'
-        'else if(latest>cur){msg.textContent="Version "+latest+" available (installed: "+cur+").";form.style.display="";}'
+        'else if(latest>cur){'
+        'msg.textContent="Version "+latest+" available (installed: "+cur+").";'
+        'form.style.display="";'
+        'var dv=document.getElementById("dash-ver");'
+        'if(dv)dv.innerHTML=cur+" \u26a0\ufe0f update available";'
+        '}'
         'else{msg.textContent="Up to date \u2713 (installed: "+cur+", latest: "+latest+")";}'
         '})'
         '.catch(function(e){document.getElementById("ver-status").textContent="Fetch error: "+e;'
