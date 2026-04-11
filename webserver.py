@@ -15,6 +15,7 @@ import ujson
 import machine
 import utime
 import settings as _settings
+import version as _version
 
 score_data = {}
 device_ip  = '—'          # set by main.py after Ethernet connects
@@ -126,6 +127,7 @@ def _dashboard_html():
         '<div style="display:grid;grid-template-columns:auto 1fr;gap:.5rem .75rem;font-size:.875rem">'
         + row('IP Address', device_ip)
         + row('Sport',      sport)
+        + row('Version',    str(_version.VERSION))
         + row('MCU Temp',   temp)
         + row('Free RAM',   '{} KB / {} KB'.format(free_kb, total_kb))
         + row('Uptime',     uptime)
@@ -255,16 +257,34 @@ def _settings_html(saved=False):
         '</div>'
         '</form>'
 
-        '<form method="POST" action="/update"'
+        '<div class="card"><h2>Firmware Update</h2>'
+        '<p id="ver-status" class="note">Checking for updates\u2026</p>'
+        '<form id="update-form" method="POST" action="/update" style="display:none;margin-top:.75rem"'
         ' onsubmit="this.querySelector(\'button\').disabled=true;'
         'this.querySelector(\'button\').textContent=\'Updating\u2026\';return true;">'
-        '<div class="card"><h2>Firmware Update</h2>'
         '<button type="submit" class="btn btn-primary">Update from GitHub</button>'
-        '<p class="note">Downloads the latest code from the main branch and writes it to flash. '
-        'settings.json is preserved. The device will need a reboot after updating. '
-        'This may take up to 30 seconds.</p>'
-        '</div>'
+        '<p class="note" style="margin-top:.5rem">Downloads the latest code and reboots automatically. '
+        'settings.json is preserved.</p>'
         '</form>'
+        '<script>'
+        '(function(){'
+        'var cur=' + str(_version.VERSION) + ';'
+        'fetch("https://raw.githubusercontent.com/chrissabato/dakbot/main/version.py")'
+        '.then(function(r){return r.text();})'
+        '.then(function(t){'
+        'var m=t.match(/VERSION\\s*=\\s*(\\d+)/);'
+        'var latest=m?parseInt(m[1]):null;'
+        'var msg=document.getElementById("ver-status");'
+        'var form=document.getElementById("update-form");'
+        'if(latest===null){msg.textContent="Could not parse version.";form.style.display="";}'
+        'else if(latest>cur){msg.textContent="Version "+latest+" available (installed: "+cur+").";form.style.display="";}'
+        'else{msg.textContent="Up to date (version "+cur+").\u2713";}'
+        '})'
+        '.catch(function(){document.getElementById("ver-status").textContent="Could not reach GitHub.";'
+        'document.getElementById("update-form").style.display="";});'
+        '})()'
+        '</script>'
+        '</div>'
 
         '</body></html>'
     )

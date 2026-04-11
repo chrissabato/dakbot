@@ -21,6 +21,7 @@ _FILES = [
     'main.py',
     'daksports.json',
     'updater.py',
+    'version.py',
 ]
 
 
