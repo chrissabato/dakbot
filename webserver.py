@@ -204,12 +204,23 @@ def _settings_html(saved=False):
         '</div>'
         '</form>'
 
-        # ---- Reboot ----------------------------------------------------------
+        # ---- Reboot / Update -------------------------------------------------
         '<form method="POST" action="/reboot"'
         ' onsubmit="return confirm(\'Reboot the device now?\');">'
         '<div class="card"><h2>Device</h2>'
         '<button type="submit" class="btn btn-danger">Reboot Device</button>'
         '<p class="note">Applies all saved settings and restarts the firmware.</p>'
+        '</div>'
+        '</form>'
+
+        '<form method="POST" action="/update"'
+        ' onsubmit="this.querySelector(\'button\').disabled=true;'
+        'this.querySelector(\'button\').textContent=\'Updating\u2026\';return true;">'
+        '<div class="card"><h2>Firmware Update</h2>'
+        '<button type="submit" class="btn btn-primary">Update from GitHub</button>'
+        '<p class="note">Downloads the latest code from the main branch and writes it to flash. '
+        'settings.json is preserved. The device will need a reboot after updating. '
+        'This may take up to 30 seconds.</p>'
         '</div>'
         '</form>'
 
@@ -244,6 +255,40 @@ async def _handle_settings_post(writer, body):
         'mqtt_topic':    form.get('mqtt_topic',    _settings.current.get('mqtt_topic', 'dakbot/score')),
     })
     await _redirect(writer, '/settings?saved=1')
+
+
+async def _handle_update(writer):
+    import updater
+    results = updater.update_all()
+
+    rows = ''
+    for filename, ok, detail in results:
+        icon  = '\u2713' if ok else '\u2717'   # ✓ / ✗
+        color = '#166534' if ok else '#991b1b'
+        info  = '{} bytes'.format(detail) if ok else str(detail)
+        rows += '<tr><td style="color:{}">{}</td><td>{}</td><td style="opacity:.6;font-size:.8rem">{}</td></tr>'.format(
+            color, icon, filename, info)
+
+    body = (
+        '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<style>body{font-family:sans-serif;background:#f0f2f5;padding:1rem;max-width:520px;margin:0 auto}'
+        '.card{background:#fff;border-radius:8px;padding:1.25rem;margin-bottom:1rem;box-shadow:0 1px 3px rgba(0,0,0,.1)}'
+        'table{width:100%;border-collapse:collapse;font-size:.875rem}'
+        'td{padding:.4rem .5rem;border-bottom:1px solid #eee}'
+        '.btn{display:inline-block;padding:.6rem 1.4rem;border:none;border-radius:6px;'
+        'font-size:.9rem;font-weight:600;cursor:pointer;background:#2563eb;color:#fff}'
+        '.btn-danger{background:#dc2626}'
+        '</style></head><body>'
+        '<h1 style="font-size:1.3rem;margin-bottom:1rem">Firmware Update</h1>'
+        '<div class="card"><table>' + rows + '</table></div>'
+        '<form method="POST" action="/reboot">'
+        '<button class="btn btn-danger">Reboot to apply</button>'
+        '</form>'
+        '&nbsp;<a href="/settings" style="margin-left:1rem;font-size:.9rem">Back to settings</a>'
+        '</body></html>'
+    )
+    await _send(writer, b'200 OK', b'text/html; charset=utf-8', body)
 
 
 async def _handle_reboot(writer):
@@ -304,6 +349,8 @@ async def _handle_client(reader, writer):
             await _handle_settings_get(writer, saved=saved)
         elif base == '/settings' and method == 'POST':
             await _handle_settings_post(writer, body)
+        elif base == '/update' and method == 'POST':
+            await _handle_update(writer)
         elif base == '/reboot' and method == 'POST':
             await _handle_reboot(writer)
         else:

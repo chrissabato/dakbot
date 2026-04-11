@@ -181,6 +181,7 @@ Settings are persisted to `settings.json` on the device flash and survive reboot
 | `/settings` | GET | Settings UI (HTML) |
 | `/settings` | POST | Save settings to flash |
 | `/reboot` | POST | Reboot device |
+| `/update` | POST | OTA update from GitHub main branch |
 
 All responses include `Access-Control-Allow-Origin: *`.
 
@@ -216,6 +217,7 @@ Example response (baseball):
 | `daktronics.py` | Async RTD serial parser (machine.UART) |
 | `webserver.py` | Minimal async HTTP server (uasyncio) |
 | `mqtt_publisher.py` | Optional async MQTT publisher (TLS, port 8883) |
+| `updater.py` | OTA updater — fetches project files from GitHub over HTTPS |
 | `index.html` | Browser scoreboard — connects via MQTT WebSocket (WSS, port 8884); hosted at [chrissabato.github.io/dakbot](https://chrissabato.github.io/dakbot) |
 | `config.py` | Hardware pin constants (PCB-fixed, do not change) |
 | `settings.py` | Persistent user settings — loads/saves `settings.json` on flash |
