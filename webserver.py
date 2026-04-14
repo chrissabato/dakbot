@@ -397,7 +397,7 @@ async def _handle_client(reader, writer):
         saved = 'saved=1' in path
 
         if base in ('/', '/data'):
-            await _send(writer, b'200 OK', b'application/json', ujson.dumps(score_data))
+            await _send(writer, b'200 OK', b'application/json', ujson.dumps([score_data]))
         elif base == '/settings' and method == 'GET':
             await _handle_settings_get(writer, saved=saved)
         elif base == '/settings' and method == 'POST':
