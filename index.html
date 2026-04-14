@@ -164,9 +164,9 @@
   <summary>MQTT Connection</summary>
   <div class="cfg-grid">
     <label for="cfg-host">Broker WSS host</label>
-    <input id="cfg-host" type="text" placeholder="xxxx.s1.eu.hivemq.cloud">
+    <input id="cfg-host" type="text" placeholder="stats.chrissabato.com">
     <label for="cfg-port">WSS port</label>
-    <input id="cfg-port" type="number" value="8884">
+    <input id="cfg-port" type="number" value="443">
     <label for="cfg-user">Username</label>
     <input id="cfg-user" type="text">
     <label for="cfg-pass">Password</label>
@@ -176,9 +176,9 @@
   </div>
   <button id="apply-btn">Connect</button>
   <p class="cfg-note">
-    Create a free HiveMQ Cloud cluster at hivemq.com.
-    Use a read-only credential here — the browser only subscribes.
-    The ESP32 publishes over TLS port 8883; the browser connects via WSS port 8884.
+    Connects to the self-hosted Mosquitto broker via Apache WebSocket proxy.
+    Use the <em>browser</em> credential here — the browser only subscribes.
+    The ESP32 publishes over TLS port 8883; the browser connects via WSS on port 443.
   </p>
 </details>
 
@@ -195,9 +195,9 @@
 // Config — edit these defaults or use the panel above
 // ─────────────────────────────────────────────────────────────────────────────
 const DEFAULTS = {
-  host:  '',                  // e.g. 'xxxx.s1.eu.hivemq.cloud'
-  port:  8884,
-  user:  '',
+  host:  'stats.chrissabato.com',
+  port:  443,
+  user:  'browser',
   pass:  '',
   topic: 'dakbot/score',
 };
@@ -489,7 +489,7 @@ function getCfg() {
 
 function populateForm(cfg) {
   document.getElementById('cfg-host').value  = cfg.host  || '';
-  document.getElementById('cfg-port').value  = cfg.port  || 8884;
+  document.getElementById('cfg-port').value  = cfg.port  || 443;
   document.getElementById('cfg-user').value  = cfg.user  || '';
   document.getElementById('cfg-pass').value  = cfg.pass  || '';
   document.getElementById('cfg-topic').value = cfg.topic || 'dakbot/score';
