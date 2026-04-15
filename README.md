@@ -251,7 +251,7 @@ The ESP32 publishes with `retain=True`, so late-joining browsers immediately rec
 
 ## 3D Printed Case
 
-A 3MF print file for a case enclosing the ESP32-S3-ETH and MAX3232 module is included in `resources/Dakbot Case.3mf`. Open it in PrusaSlicer, Bambu Studio, or any slicer that supports the 3MF format.
+A 3MF print file for a case enclosing the ESP32-S3-ETH and MAX3232 module is included in [`resources/Dakbot Case.3mf`](https://github.com/chrissabato/dakbot/raw/main/resources/Dakbot%20Case.3mf). Open it in PrusaSlicer, Bambu Studio, or any slicer that supports the 3MF format.
 
 ---
 
