@@ -1,9 +1,9 @@
 # dakbot
 
+MicroPython firmware for the **Waveshare ESP32-S3-ETH** that reads live scoreboard data from a **Daktronics AllSport 5000** controller and serves it as JSON over Ethernet.
+
 ![dakbot](https://chrissabato.com/20260416/20260416.jpg)
 ![dakbot](https://chrissabato.com/20260416/dakbot.jpg)
-
-MicroPython firmware for the **Waveshare ESP32-S3-ETH** that reads live scoreboard data from a **Daktronics AllSport 5000** controller and serves it as JSON over Ethernet.
 
 ---
 
