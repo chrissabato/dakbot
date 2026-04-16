@@ -119,7 +119,12 @@ def _process_baseball(data):
         ''
     )
 
-    tb = '\u25bc' if 'bot' in data.get('InningDescription', '').lower() else '\u25b2'
+    inning_state = data.get('InningDescription', '').lower()
+    tb = (
+        '\u25bc' if 'bot' in inning_state else
+        '\u25b2' if 'top' in inning_state else
+        ''
+    )
     data['TB']     = tb
     data['top']    = '\u25b2' if tb == '\u25b2' else ''
     data['bottom'] = '\u25bc' if tb == '\u25bc' else ''
