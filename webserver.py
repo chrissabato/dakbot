@@ -50,6 +50,17 @@ def _parse_form(body):
     return data
 
 
+def _clean_hostname(value):
+    """Strip a URL scheme, path, and trailing slashes so a pasted URL
+    (e.g. https://broker.example.com/) still saves as a bare hostname —
+    the raw socket connect in mqtt_publisher.py needs just the host."""
+    value = value.strip()
+    if '://' in value:
+        value = value.split('://', 1)[1]
+    value = value.split('/', 1)[0]
+    return value
+
+
 async def _send(writer, status, content_type, body):
     if isinstance(body, str):
         body = body.encode('utf-8')
@@ -328,7 +339,7 @@ async def _handle_settings_post(writer, body):
         'uart_rx':       int(form.get('uart_rx',   _settings.current.get('uart_rx', 16))),
         'http_port':     int(form.get('http_port', _settings.current.get('http_port', 80))),
         'mqtt_enabled':  'mqtt_enabled' in form,
-        'mqtt_broker':   form.get('mqtt_broker',   _settings.current.get('mqtt_broker', '')),
+        'mqtt_broker':   _clean_hostname(form.get('mqtt_broker', _settings.current.get('mqtt_broker', ''))),
         'mqtt_port':     int(form.get('mqtt_port', _settings.current.get('mqtt_port', 8883))),
         'mqtt_user':     form.get('mqtt_user',     _settings.current.get('mqtt_user', '')),
         'mqtt_password': form.get('mqtt_password', _settings.current.get('mqtt_password', '')),

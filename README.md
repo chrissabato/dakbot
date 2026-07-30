@@ -61,66 +61,24 @@ GPIO17 is configured as UART TX but left unconnected — the AllSport link is re
 
 ## Installation
 
-### 1. Install tools
+### Blank board setup
 
-Requires Python 3.
+Requires Python 3. From inside the `dakbot` repo folder:
 
 ```bash
-pip install esptool mpremote
+./setup.sh PORT
 ```
 
-### 2. Download MicroPython firmware
-
-Go to **https://micropython.org/download/ESP32_GENERIC_S3/** and download the latest `.bin` file.
-
-### 3. Put the board in bootloader mode
-
-1. Hold the **BOOT** button
-2. Press and release **RESET**
-3. Release **BOOT**
-
-The board will appear as a serial port:
+Replace `PORT` with your serial port:
 - **Windows:** `COM3`, `COM4`, etc. — check Device Manager
 - **Mac:** `/dev/cu.usbmodem*` or `/dev/cu.usbserial*`
 - **Linux:** `/dev/ttyACM0` or `/dev/ttyUSB0`
 
-### 4. Flash the firmware
+The script installs `esptool`/`mpremote` if missing, downloads the latest stable MicroPython firmware for `ESP32_GENERIC_S3`, erases and flashes the board, verifies W5500 (Ethernet) support, and copies all project files. It will pause and prompt you to put the board in bootloader mode (hold **BOOT**, press and release **RESET**, release **BOOT**) and again to reset after flashing.
 
-Replace `PORT` with your port and `FIRMWARE.bin` with the filename you downloaded:
+If W5500 verification fails, re-run with a manually downloaded `ESP32_GENERIC_S3-SPIRAM` build from [micropython.org/download/ESP32_GENERIC_S3](https://micropython.org/download/ESP32_GENERIC_S3/) by placing it in `/tmp/dakbot-firmware/` before running the script.
 
-```bash
-esptool.py --chip esp32s3 --port PORT erase_flash
-esptool.py --chip esp32s3 --port PORT write_flash -z 0 FIRMWARE.bin
-```
-
-Press **RESET** after flashing.
-
-### 5. Verify W5500 support
-
-```bash
-mpremote connect PORT
-```
-
-At the `>>>` prompt:
-
-```python
-import network
-print(hasattr(network, 'PHY_W5500'))   # must print True
-```
-
-Press `Ctrl+X` to exit. If it prints `False`, try the `ESP32_GENERIC_S3-SPIRAM` variant from the same download page.
-
-### 6. Copy the project files
-
-From inside the `dakbot` repo folder, use the included script:
-
-```bash
-./flash.sh PORT
-```
-
-Replace `PORT` with your serial port (e.g. `/dev/ttyACM0`). The script copies all required files and exits with an error if any transfer fails.
-
-### 7. Boot and verify
+### Boot and verify
 
 Press **RESET**. Connect to the REPL to see startup output:
 
@@ -225,6 +183,8 @@ Example response (baseball):
 | `config.py` | Hardware pin constants (PCB-fixed, do not change) |
 | `settings.py` | Persistent user settings — loads/saves `settings.json` on flash |
 | `daksports.json` | Field name → [position, length] mappings per sport |
+| `setup.sh` | Full setup of a blank board — flash MicroPython + copy project files |
+| `flash.sh` | Copy project files to an already-flashed board |
 
 ---
 
