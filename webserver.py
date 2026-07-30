@@ -116,6 +116,7 @@ def _dashboard_html():
     free_kb   = gc.mem_free()  // 1024
     total_kb  = (gc.mem_free() + gc.mem_alloc()) // 1024
     sport     = score_data.get('sport', '—')
+    dev_name  = score_data.get('device_name', '—')
 
     def row(label, value):
         return (
@@ -126,6 +127,7 @@ def _dashboard_html():
     return (
         '<div class="card"><h2>Device Status</h2>'
         '<div style="display:grid;grid-template-columns:auto 1fr;gap:.5rem .75rem;font-size:.875rem">'
+        + row('Device Name', dev_name)
         + row('IP Address', device_ip)
         + row('Sport',      sport)
         + row('Version', '<span id="dash-ver">' + str(_version.VERSION) + '</span>')
@@ -201,8 +203,16 @@ def _settings_html(saved=False):
         + banner
         + _dashboard_html() +
 
-        # ---- Sport -----------------------------------------------------------
+        # ---- Identity ----------------------------------------------------------
         '<form method="POST" action="/settings">'
+        '<div class="card"><h2>Identity</h2>'
+        '<label>Device Name</label>'
+        '<input type="text" name="device_name" value="' + _settings.device_name() + '" '
+        'placeholder="' + _settings._default_device_name() + '">'
+        '<p class="note">Defaults to the device\'s MAC address if left blank.</p>'
+        '</div>'
+
+        # ---- Sport -----------------------------------------------------------
         '<div class="card"><h2>Sport</h2>'
         '<label for="sport">Active sport</label>'
         '<select name="sport" id="sport">' + opts + '</select>'
@@ -306,6 +316,7 @@ async def _handle_settings_get(writer, saved=False):
 async def _handle_settings_post(writer, body):
     form = _parse_form(body)
     _settings.save({
+        'device_name':   form.get('device_name', _settings.current.get('device_name', '')),
         'sport':         form.get('sport', _settings.DEFAULTS['sport']),
         'use_dhcp':      'use_dhcp' in form,
         'ip':            form.get('ip',        _settings.current.get('ip', '')),

@@ -11,8 +11,10 @@
 # =============================================================================
 
 import ujson
+import machine
 
 DEFAULTS = {
+    "device_name":    "",
     "sport":          "baseball",
     "uart_rx":        16,
     "uart_tx":        17,
@@ -53,6 +55,15 @@ def save(data):
     with open(_FILE, "w") as f:
         ujson.dump(current, f)
     print("Settings saved to", _FILE)
+
+
+def _default_device_name():
+    return ':'.join('{:02X}'.format(b) for b in machine.unique_id())
+
+
+def device_name():
+    """Effective device name: the user-set value, or the MAC-style default."""
+    return current.get('device_name') or _default_device_name()
 
 
 load()
