@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dakbot Scoreboard</title>
+<style>
+  /* ── Reset ─────────────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── Page ──────────────────────────────────────────────────────────────── */
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 1rem;
+    gap: 1rem;
+  }
+
+  h1 { font-size: 1.1rem; font-weight: 600; opacity: .6; letter-spacing: .08em; text-transform: uppercase; }
+
+  /* ── Status pill ────────────────────────────────────────────────────────── */
+  #status {
+    display: inline-flex; align-items: center; gap: .45rem;
+    padding: .3rem .8rem; border-radius: 99px;
+    font-size: .75rem; font-weight: 600; letter-spacing: .04em;
+    transition: background .4s, color .4s;
+  }
+  #status::before {
+    content: ''; display: block; width: .55rem; height: .55rem;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .st-connecting { background: #1f2937; color: #9ca3af; }
+  .st-live       { background: #052e16; color: #4ade80; }
+  .st-stale      { background: #2d1a00; color: #fb923c; }
+  .st-error      { background: #1f0808; color: #f87171; }
+
+  /* ── Scoreboard card ────────────────────────────────────────────────────── */
+  #board {
+    width: 100%; max-width: 540px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex; flex-direction: column; gap: 1.25rem;
+  }
+
+  /* ── Teams row ──────────────────────────────────────────────────────────── */
+  .teams {
+    display: grid;
+    grid-template-columns: 1fr auto auto 1fr;
+    align-items: center;
+    gap: .5rem 1rem;
+    text-align: center;
+  }
+  .team-name {
+    font-size: 1.6rem; font-weight: 800;
+    letter-spacing: -.02em; text-transform: uppercase;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .team-score {
+    font-size: 3.5rem; font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    min-width: 2.5ch; text-align: center;
+  }
+  .divider { font-size: 2rem; opacity: .25; }
+
+  /* ── Period / clock row ─────────────────────────────────────────────────── */
+  .meta {
+    display: flex; align-items: center; justify-content: center; gap: 1.5rem;
+    font-size: 1.1rem; font-weight: 600;
+    border-top: 1px solid #21262d;
+    padding-top: 1rem;
+  }
+  .clock { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+  /* ── Detail grid ─────────────────────────────────────────────────────────── */
+  .details {
+    display: flex; flex-wrap: wrap; gap: .5rem;
+    border-top: 1px solid #21262d;
+    padding-top: 1rem;
+  }
+  .detail-item {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: .3rem .6rem;
+    font-size: .8rem;
+    display: flex; gap: .4rem;
+  }
+  .detail-item .dk { opacity: .5; }
+  .detail-item .dv { font-weight: 600; }
+
+  /* ── Football situation row ─────────────────────────────────────────────── */
+  .situation {
+    display: flex; align-items: center; justify-content: center; gap: 1.2rem;
+    border-top: 1px solid #21262d; padding-top: 1rem;
+  }
+  .down-distance { font-size: 1.6rem; font-weight: 800; }
+  .ball-on { font-size: 1rem; opacity: .7; }
+
+  /* ── Baseball H/E/LOB table ─────────────────────────────────────────────── */
+  .hel-table {
+    width: 100%; border-collapse: collapse;
+    border-top: 1px solid #21262d; margin-top: .5rem; font-size: .85rem;
+  }
+  .hel-table th, .hel-table td { padding: .35rem .6rem; text-align: center; }
+  .hel-table th { opacity: .5; font-weight: 600; font-size: .75rem; text-transform: uppercase; }
+  .hel-table td:first-child { text-align: left; font-weight: 700; opacity: .8; }
+  .hel-table tr:nth-child(even) { background: rgba(255,255,255,.03); }
+
+  /* ── Empty / no-data state ──────────────────────────────────────────────── */
+  #no-data {
+    opacity: .4; text-align: center; font-size: .9rem; line-height: 1.6;
+  }
+
+  /* ── Config panel ────────────────────────────────────────────────────────── */
+  details {
+    width: 100%; max-width: 540px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    font-size: .85rem;
+  }
+  summary { cursor: pointer; font-weight: 600; opacity: .6; user-select: none; }
+  .cfg-grid {
+    display: grid; grid-template-columns: auto 1fr; gap: .4rem .75rem;
+    margin-top: .75rem; align-items: center;
+  }
+  .cfg-grid label { opacity: .6; white-space: nowrap; }
+  .cfg-grid input {
+    width: 100%; background: #0d1117; border: 1px solid #30363d;
+    border-radius: 4px; padding: .3rem .5rem; color: #e6edf3;
+    font-size: .85rem;
+  }
+  #apply-btn {
+    margin-top: .75rem;
+    padding: .4rem 1rem; border: none; border-radius: 5px;
+    background: #2563eb; color: #fff; font-weight: 600;
+    cursor: pointer; font-size: .85rem;
+  }
+  #apply-btn:hover { background: #1d4ed8; }
+  .cfg-note { font-size: .75rem; opacity: .45; margin-top: .5rem; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<h1>Dakbot Scoreboard</h1>
+<span id="status" class="st-connecting">Connecting&hellip;</span>
+
+<div id="board">
+  <div id="no-data">Waiting for data&hellip;</div>
+</div>
+
+<!-- ── MQTT config ──────────────────────────────────────────────────────── -->
+<details id="cfg-panel">
+  <summary>MQTT Connection</summary>
+  <div class="cfg-grid">
+    <label for="cfg-host">Broker WSS host</label>
+    <input id="cfg-host" type="text" placeholder="stats.chrissabato.com">
+    <label for="cfg-port">WSS port</label>
+    <input id="cfg-port" type="number" value="443">
+    <label for="cfg-user">Username</label>
+    <input id="cfg-user" type="text">
+    <label for="cfg-pass">Password</label>
+    <input id="cfg-pass" type="password">
+    <label for="cfg-topic">Topic</label>
+    <input id="cfg-topic" type="text" value="dakbot/score">
+  </div>
+  <button id="apply-btn">Connect</button>
+  <p class="cfg-note">
+    Connects to the self-hosted Mosquitto broker via Apache WebSocket proxy.
+    Use the <em>browser</em> credential here — the browser only subscribes.
+    The ESP32 publishes over TLS port 8883; the browser connects via WSS on port 443.
+  </p>
+</details>
+
+<!-- ── Raw data debug ──────────────────────────────────────────────────── -->
+<details id="debug-panel" style="width:100%;max-width:540px;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:.75rem 1rem;font-size:.85rem;">
+  <summary style="cursor:pointer;font-weight:600;opacity:.6;user-select:none;">Raw MQTT data</summary>
+  <pre id="raw-json" style="margin-top:.75rem;font-size:.75rem;color:#8b949e;white-space:pre-wrap;word-break:break-all;">No data received yet.</pre>
+</details>
+
+<!-- ── MQTT.js ─────────────────────────────────────────────────────────── -->
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// Config — edit these defaults or use the panel above
+// ─────────────────────────────────────────────────────────────────────────────
+const DEFAULTS = {
+  host:  'stats.chrissabato.com',
+  port:  443,
+  user:  'browser',
+  pass:  '',
+  topic: 'dakbot/score',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
+let mqttClient   = null;
+let lastData     = null;
+let staleTimer   = null;
+
+const $status  = document.getElementById('status');
+const $board   = document.getElementById('board');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Status helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function setStatus(cls, text) {
+  $status.className = 'st-' + cls;
+  $status.textContent = text;
+}
+
+// Mark data stale after 10 s without an update
+function resetStaleTimer() {
+  clearTimeout(staleTimer);
+  staleTimer = setTimeout(() => setStatus('stale', 'No data (10 s)'), 10_000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MQTT
+// ─────────────────────────────────────────────────────────────────────────────
+function connect(cfg) {
+  if (mqttClient) { mqttClient.end(true); mqttClient = null; }
+
+  if (!cfg.host) {
+    setStatus('error', 'Enter broker host');
+    return;
+  }
+
+  setStatus('connecting', 'Connecting\u2026');
+
+  const url = `wss://${cfg.host}:${cfg.port}/mqtt`;
+  const opts = {
+    username:  cfg.user   || undefined,
+    password:  cfg.pass   || undefined,
+    reconnectPeriod: 5000,
+    connectTimeout:  10_000,
+  };
+
+  mqttClient = mqtt.connect(url, opts);
+
+  mqttClient.on('connect', () => {
+    setStatus('connecting', 'Subscribing\u2026');
+    mqttClient.subscribe(cfg.topic, err => {
+      if (err) { setStatus('error', 'Subscribe failed'); return; }
+      setStatus('live', 'Live');
+      resetStaleTimer();
+    });
+  });
+
+  mqttClient.on('message', (_topic, payload) => {
+    try {
+      const raw = payload.toString();
+      const data = JSON.parse(raw);
+      document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+      lastData = data;
+      render(data);
+      setStatus('live', 'Live');
+      resetStaleTimer();
+    } catch (e) {
+      console.warn('Bad payload:', e);
+    }
+  });
+
+  mqttClient.on('error', err => {
+    console.error('MQTT error:', err);
+    setStatus('error', 'Error — retrying');
+  });
+
+  mqttClient.on('offline', () => setStatus('stale', 'Offline'));
+  mqttClient.on('reconnect', () => setStatus('connecting', 'Reconnecting\u2026'));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rendering helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function e(tag, cls, text) {
+  const el = document.createElement(tag);
+  if (cls)  el.className = cls;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+function pill(label, value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const d = e('div', 'detail-item');
+  d.appendChild(e('span', 'dk', label));
+  d.appendChild(e('span', 'dv', value));
+  return d;
+}
+
+function pills(board, items) {
+  const row = e('div', 'details');
+  for (const [label, value] of items) {
+    const p = pill(label, value);
+    if (p) row.appendChild(p);
+  }
+  if (row.children.length) board.appendChild(row);
+}
+
+// hockeylacrosse field names have a numeric prefix — strip it for lookup
+function norm(d) {
+  const out = {};
+  for (const [k, v] of Object.entries(d)) {
+    out[k.replace(/^\d+/, '')] = v;
+  }
+  return out;
+}
+
+// Shared teams/score header
+function renderHeader(board, awayName, awayScore, homeScore, homeName) {
+  const teams = e('div', 'teams');
+  const an = e('div', 'team-name', awayName || 'AWAY');
+  const as = e('div', 'team-score', awayScore || '–');
+  const hs = e('div', 'team-score', homeScore || '–');
+  const hn = e('div', 'team-name', homeName  || 'HOME');
+  if (parseInt(awayScore) > parseInt(homeScore)) as.style.color = '#4ade80';
+  if (parseInt(homeScore) > parseInt(awayScore)) hs.style.color = '#4ade80';
+  teams.append(an, as, hs, hn);
+  board.appendChild(teams);
+}
+
+// Shared clock/period row
+function renderMeta(board, period, clock) {
+  if (!period && !clock) return;
+  const meta = e('div', 'meta');
+  if (period) meta.appendChild(e('span', null, period));
+  if (clock)  meta.appendChild(e('span', 'clock', clock));
+  board.appendChild(meta);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sport renderers
+// ─────────────────────────────────────────────────────────────────────────────
+function renderBaseball(board, d) {
+  renderHeader(board, d.AwayTeamName, d.AwayTeamScore, d.HomeTeamScore, d.HomeTeamName);
+
+  // Inning situation
+  const inning = (d.InningDescription || '').trim() || (d.InningText || '').trim();
+  if (inning) {
+    const meta = e('div', 'meta');
+    meta.appendChild(e('span', null, inning));
+    board.appendChild(meta);
+  }
+
+  // Count & outs
+  pills(board, [
+    ['Count', d.Count],
+    ['Outs',  d.Outs],
+    ['Ball',  d.Ball],
+    ['Strike', d.Strike],
+    ['Out',   d.Out],
+  ]);
+
+  // H / E / LOB table
+  const awayH = d.AwayHits, awayE = d.AwayErrors, awayL = d.AwayLeftonBase;
+  const homeH = d.HomeHits, homeE = d.HomeErrors, homeL = d.HomeLeftonBase;
+  if (awayH || homeH) {
+    const tbl = document.createElement('table');
+    tbl.className = 'hel-table';
+    tbl.innerHTML =
+      '<tr><th></th><th>H</th><th>E</th><th>LOB</th></tr>' +
+      `<tr><td>${d.AwayTeamAbbreviation||'AWAY'}</td><td>${awayH||'–'}</td><td>${awayE||'–'}</td><td>${awayL||'–'}</td></tr>` +
+      `<tr><td>${d.HomeTeamAbbreviation||'HOME'}</td><td>${homeH||'–'}</td><td>${homeE||'–'}</td><td>${homeL||'–'}</td></tr>`;
+    board.appendChild(tbl);
+  }
+}
+
+function renderBasketball(board, d) {
+  renderHeader(board, d.AwayTeamName, d.AwayTeamScore, d.HomeTeamScore, d.HomeTeamName);
+  renderMeta(board, d.GameText, d['MainClockTime[mm:ss.t]'] || d['MainClockTime[mm:ssss.t]']);
+  pills(board, [
+    ['Away Fouls', d.AwayTeamFouls],
+    ['Away Bonus', d.AwayBonusText],
+    ['Home Fouls', d.HomeTeamFouls],
+    ['Home Bonus', d.HomeBonusText],
+    ['Shot Clock', d.ShotClockTime],
+  ]);
+}
+
+function renderFootball(board, d) {
+  renderHeader(board, d.AwayTeamName, d.AwayTeamScore, d.HomeTeamScore, d.HomeTeamName);
+  renderMeta(board, d.QuarterText, d['MainClockTime[mm:ss.t]'] || d['MainClockTime[mm:ssss.t]']);
+
+  // Down & distance situation
+  const down = (d.Down || '').trim(), togo = (d.ToGo || '').trim(), ballon = (d.BallOn || '').trim();
+  if (down || togo || ballon) {
+    const sit = e('div', 'situation');
+    if (down && togo) sit.appendChild(e('span', 'down-distance', `${down} & ${togo}`));
+    if (ballon)       sit.appendChild(e('span', 'ball-on', `Ball on ${ballon}`));
+    board.appendChild(sit);
+  }
+
+  // Possession & yards
+  const awayPoss = (d.AwayPossessionText || '').trim();
+  const homePoss = (d.HomePossessionText || '').trim();
+  pills(board, [
+    ['Possession', awayPoss ? d.AwayTeamAbbreviation || 'Away' : homePoss ? d.HomeTeamAbbreviation || 'Home' : null],
+    ['Play Clock', d.PlayClockTime],
+  ]);
+}
+
+function renderVolleyball(board, d) {
+  renderHeader(board, d.AwayTeamName, d.AwayTeamScore, d.HomeTeamScore, d.HomeTeamName);
+  renderMeta(board, d.GameText, null);
+
+  // Sets won
+  const awayW = (d.AwayGamesWon || '').trim(), homeW = (d.HomeGamesWon || '').trim();
+  if (awayW || homeW) {
+    const meta = e('div', 'meta');
+    meta.style.fontSize = '1rem';
+    meta.appendChild(e('span', null, `Sets: ${awayW||'0'} – ${homeW||'0'}`));
+    board.appendChild(meta);
+  }
+
+  // Serve indicator
+  const awayServe = (d.AwayServeText || '').trim();
+  const homeServe = (d.HomeServeText || '').trim();
+  pills(board, [
+    ['Serving', awayServe ? (d.AwayTeamAbbreviation || 'Away') : homeServe ? (d.HomeTeamAbbreviation || 'Home') : null],
+  ]);
+}
+
+function renderHockey(board, d) {
+  // Strip numeric prefixes so field names match other sports
+  const n = norm(d);
+  renderHeader(board, n.AwayTeamName, n.AwayTeamScore, n.HomeTeamScore, n.HomeTeamName);
+  renderMeta(board, n.PeriodText, n['MainClockTime(mm:ss.t)'] || n['MainClockTime(mm:ssss.t)']);
+  pills(board, [
+    ['Away Shots', n['AwayShotsOnGoal-Total']],
+    ['Home Shots', n['HomeShotsOnGoal-Total']],
+    ['Away Saves', n['AwaySaves-Total']],
+    ['Home Saves', n['HomeSaves-Total']],
+  ]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dispatch
+// ─────────────────────────────────────────────────────────────────────────────
+const SPORT_RENDERERS = {
+  baseball:       renderBaseball,
+  basketball:     renderBasketball,
+  football:       renderFootball,
+  volleyball:     renderVolleyball,
+  hockeylacrosse: renderHockey,
+};
+
+function render(d) {
+  $board.innerHTML = '';
+  const fn = SPORT_RENDERERS[d.sport] || renderBaseball;
+  fn($board, d);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Config panel wiring — persisted to localStorage
+// ─────────────────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'dakbot_mqtt_cfg';
+
+function saveCfg(cfg) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+}
+
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS;
+  } catch { return DEFAULTS; }
+}
+
+function getCfg() {
+  return {
+    host:  document.getElementById('cfg-host').value.trim()   || DEFAULTS.host,
+    port:  parseInt(document.getElementById('cfg-port').value) || DEFAULTS.port,
+    user:  document.getElementById('cfg-user').value.trim()   || DEFAULTS.user,
+    pass:  document.getElementById('cfg-pass').value          || DEFAULTS.pass,
+    topic: document.getElementById('cfg-topic').value.trim()  || DEFAULTS.topic,
+  };
+}
+
+function populateForm(cfg) {
+  document.getElementById('cfg-host').value  = cfg.host  || '';
+  document.getElementById('cfg-port').value  = cfg.port  || 443;
+  document.getElementById('cfg-user').value  = cfg.user  || '';
+  document.getElementById('cfg-pass').value  = cfg.pass  || '';
+  document.getElementById('cfg-topic').value = cfg.topic || 'dakbot/score';
+}
+
+document.getElementById('apply-btn').addEventListener('click', () => {
+  const cfg = getCfg();
+  saveCfg(cfg);
+  connect(cfg);
+});
+
+// On load: restore saved config, then let ?device= or ?topic= in the URL
+// override just the topic for this pageview (not persisted to localStorage).
+const params = new URLSearchParams(location.search);
+const deviceParam = params.get('device');
+const topicParam  = params.get('topic');
+
+const saved = loadSaved();
+if (deviceParam)    saved.topic = 'dakbot/score/' + deviceParam;
+else if (topicParam) saved.topic = topicParam;
+
+populateForm(saved);
+if (saved.host) connect(saved);
+else document.getElementById('cfg-panel').open = true;
+</script>
+
+</body>
+</html>

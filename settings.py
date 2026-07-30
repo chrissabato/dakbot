@@ -29,7 +29,7 @@ DEFAULTS = {
     "mqtt_port":      8883,
     "mqtt_user":      "",
     "mqtt_password":  "",
-    "mqtt_topic":     "dakbot/score",
+    "mqtt_topic":     "",
 }
 
 _FILE = "settings.json"
@@ -64,6 +64,16 @@ def _default_device_name():
 def device_name():
     """Effective device name: the user-set value, or the MAC-style default."""
     return current.get('device_name') or _default_device_name()
+
+
+def _default_mqtt_topic():
+    mac = ''.join('{:02x}'.format(b) for b in machine.unique_id())
+    return 'dakbot/score/' + mac
+
+
+def mqtt_topic():
+    """Effective MQTT topic: the user-set value, or a MAC-scoped default."""
+    return current.get('mqtt_topic') or _default_mqtt_topic()
 
 
 load()

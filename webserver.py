@@ -161,8 +161,10 @@ def _mqtt_html(s):
         '<label>Password</label>'
         '<input type="text" name="mqtt_password" value="' + s.get('mqtt_password', '') + '">'
         '<label>Topic</label>'
-        '<input type="text" name="mqtt_topic" value="' + s.get('mqtt_topic', 'dakbot/score') + '">'
-        '<p class="note">Requires umqtt.simple on the device. '
+        '<input type="text" name="mqtt_topic" value="' + s.get('mqtt_topic', '') + '" '
+        'placeholder="' + _settings._default_mqtt_topic() + '">'
+        '<p class="note">Defaults to a per-device topic (dakbot/score/&lt;MAC&gt;) if left blank. '
+        'Requires umqtt.simple on the device. '
         'Install once: <code>mpremote mip install umqtt.simple</code>. '
         'Reboot required after changing.</p>'
         '</div>'
@@ -330,7 +332,7 @@ async def _handle_settings_post(writer, body):
         'mqtt_port':     int(form.get('mqtt_port', _settings.current.get('mqtt_port', 8883))),
         'mqtt_user':     form.get('mqtt_user',     _settings.current.get('mqtt_user', '')),
         'mqtt_password': form.get('mqtt_password', _settings.current.get('mqtt_password', '')),
-        'mqtt_topic':    form.get('mqtt_topic',    _settings.current.get('mqtt_topic', 'dakbot/score')),
+        'mqtt_topic':    form.get('mqtt_topic',    _settings.current.get('mqtt_topic', '')),
     })
     await _redirect(writer, '/settings?saved=1')
 

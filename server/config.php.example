@@ -1,0 +1,6 @@
+<?php
+// Copy this file to config.php and fill in your broker credentials.
+define('MQTT_HOST', 'localhost');
+define('MQTT_PORT', 1883);
+define('MQTT_USER', 'browser');
+define('MQTT_PASS', 'changeme');

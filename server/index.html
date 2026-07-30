@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dakbot Devices</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    min-height: 100dvh;
+    padding: 1.5rem 1rem;
+  }
+
+  h1 {
+    font-size: 1.1rem; font-weight: 600; opacity: .6;
+    letter-spacing: .08em; text-transform: uppercase;
+    text-align: center; margin-bottom: 1.25rem;
+  }
+
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    display: flex; flex-direction: column; gap: .6rem;
+  }
+
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: .5rem;
+  }
+  .device-id {
+    font-size: .75rem; font-weight: 600; opacity: .5;
+    font-family: ui-monospace, monospace; letter-spacing: .02em;
+  }
+  .card-head-right {
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .sport-badge {
+    font-size: .65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; padding: .15rem .5rem; border-radius: 99px;
+    background: #1f2937; color: #9ca3af;
+  }
+  .json-link, .monitor-link {
+    font-size: .7rem; font-weight: 600; color: #58a6ff;
+    text-decoration: none; opacity: .8;
+  }
+  .json-link:hover, .monitor-link:hover { opacity: 1; text-decoration: underline; }
+
+  .teams {
+    display: grid; grid-template-columns: 1fr auto auto 1fr;
+    align-items: center; gap: .4rem .75rem; text-align: center;
+  }
+  .team-name {
+    font-size: 1.05rem; font-weight: 800; letter-spacing: -.01em;
+    text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .team-score {
+    font-size: 2rem; font-weight: 900; font-variant-numeric: tabular-nums;
+    line-height: 1; min-width: 1.8ch; text-align: center;
+  }
+  .divider { font-size: 1.2rem; opacity: .25; }
+
+  .meta {
+    display: flex; align-items: center; justify-content: center; gap: 1rem;
+    font-size: .85rem; font-weight: 600; opacity: .8;
+    border-top: 1px solid #21262d; padding-top: .6rem;
+  }
+  .clock { font-variant-numeric: tabular-nums; font-weight: 800; }
+
+  #empty {
+    text-align: center; opacity: .4; font-size: .9rem;
+    margin-top: 3rem;
+  }
+
+  #status {
+    text-align: center; font-size: .75rem; opacity: .35;
+    margin-top: 1.5rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>Dakbot Devices</h1>
+<div id="grid"></div>
+<div id="empty" style="display:none">No devices publishing right now.</div>
+<div id="status">Refreshing every 3s&hellip;</div>
+
+<script>
+const ENDPOINT   = 'api.php';
+const POLL_MS    = 3000;
+const $grid      = document.getElementById('grid');
+const $empty     = document.getElementById('empty');
+const $status    = document.getElementById('status');
+
+function e(tag, cls, text) {
+  const el = document.createElement(tag);
+  if (cls)  el.className = cls;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+// hockeylacrosse fields carry a numeric prefix — strip it for lookup
+function norm(d) {
+  const out = {};
+  for (const [k, v] of Object.entries(d)) out[k.replace(/^\d+/, '')] = v;
+  return out;
+}
+
+function clockFor(d) {
+  if (d.sport === 'hockeylacrosse') {
+    const n = norm(d);
+    return { period: n.PeriodText, clock: n['MainClockTime(mm:ss.t)'] || n['MainClockTime(mm:ssss.t)'] };
+  }
+  if (d.sport === 'baseball') {
+    return { period: (d.InningDescription || d.InningText || '').trim(), clock: null };
+  }
+  if (d.sport === 'volleyball') {
+    return { period: d.GameText, clock: null };
+  }
+  return { period: d.GameText || d.QuarterText, clock: d['MainClockTime[mm:ss.t]'] || d['MainClockTime[mm:ssss.t]'] };
+}
+
+function renderCard(d) {
+  const card = e('div', 'card');
+
+  const head = e('div', 'card-head');
+  head.appendChild(e('span', 'device-id', d.device || 'unknown'));
+
+  const right = e('div', 'card-head-right');
+  const monitorLink = e('a', 'monitor-link', 'Monitor');
+  monitorLink.href = 'monitor/?device=' + encodeURIComponent(d.device || '');
+  right.appendChild(monitorLink);
+  const jsonLink = e('a', 'json-link', 'JSON');
+  jsonLink.href = 'api.php?device=' + encodeURIComponent(d.device || '');
+  jsonLink.target = '_blank';
+  jsonLink.rel = 'noopener';
+  right.appendChild(jsonLink);
+  right.appendChild(e('span', 'sport-badge', d.sport || '?'));
+  head.appendChild(right);
+
+  card.appendChild(head);
+
+  const teams = e('div', 'teams');
+  const awayScore = d.AwayTeamScore, homeScore = d.HomeTeamScore;
+  const as = e('div', 'team-score', awayScore || '–');
+  const hs = e('div', 'team-score', homeScore || '–');
+  if (parseInt(awayScore) > parseInt(homeScore)) as.style.color = '#4ade80';
+  if (parseInt(homeScore) > parseInt(awayScore)) hs.style.color = '#4ade80';
+  teams.append(
+    e('div', 'team-name', d.AwayTeamName || 'AWAY'),
+    as,
+    hs,
+    e('div', 'team-name', d.HomeTeamName || 'HOME'),
+  );
+  card.appendChild(teams);
+
+  const { period, clock } = clockFor(d);
+  if (period || clock) {
+    const meta = e('div', 'meta');
+    if (period) meta.appendChild(e('span', null, period));
+    if (clock)  meta.appendChild(e('span', 'clock', clock));
+    card.appendChild(meta);
+  }
+
+  return card;
+}
+
+async function poll() {
+  try {
+    const res = await fetch(ENDPOINT, { cache: 'no-store' });
+    const devices = await res.json();
+
+    $grid.innerHTML = '';
+    if (!Array.isArray(devices) || devices.length === 0) {
+      $empty.style.display = '';
+      $status.textContent = 'Refreshing every 3s…';
+      return;
+    }
+    $empty.style.display = 'none';
+
+    devices
+      .sort((a, b) => (a.device || '').localeCompare(b.device || ''))
+      .forEach(d => $grid.appendChild(renderCard(d)));
+
+    $status.textContent = `${devices.length} device${devices.length === 1 ? '' : 's'} · last updated ${new Date().toLocaleTimeString()}`;
+  } catch (err) {
+    $status.textContent = 'Error fetching devices — retrying…';
+    console.error(err);
+  }
+}
+
+poll();
+setInterval(poll, POLL_MS);
+</script>
+
+</body>
+</html>

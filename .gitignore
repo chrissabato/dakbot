@@ -3,3 +3,4 @@ __pycache__/
 *.pyo
 settings.json
 monitor.py
+server/config.php

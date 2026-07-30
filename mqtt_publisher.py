@@ -13,10 +13,17 @@ import uasyncio as asyncio
 import ujson
 import ssl
 import utime
+import machine
 import settings as _settings
 
 # Event set by serial_reader_task whenever score_data changes
 data_ready = asyncio.Event()
+
+
+def _client_id():
+    """Unique per-device client ID: dakbot + MAC address, no separators."""
+    mac = ''.join('{:02x}'.format(b) for b in machine.unique_id())
+    return ('dakbot_' + mac).encode()
 
 
 def _make_client():
@@ -25,7 +32,7 @@ def _make_client():
     ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ssl_ctx.verify_mode = ssl.CERT_NONE
     client = MQTTClient(
-        client_id = b'dakbot',
+        client_id = _client_id(),
         server    = s['mqtt_broker'].encode(),
         port      = s.get('mqtt_port', 8883),
         user      = s['mqtt_user'].encode()     if s.get('mqtt_user')     else None,
@@ -43,7 +50,7 @@ async def run(get_score):
     task keeps the broker connection alive every 30 s.
     """
     s     = _settings.current
-    topic = s.get('mqtt_topic', 'dakbot/score').encode()
+    topic = _settings.mqtt_topic().encode()
     print('MQTT publisher starting — broker:', s.get('mqtt_broker'))
 
     while True:
