@@ -58,6 +58,7 @@ async def _send(writer, status, content_type, body):
         b'Content-Type: ' + content_type + b'\r\n'
         b'Content-Length: ' + str(len(body)).encode() + b'\r\n'
         b'Access-Control-Allow-Origin: *\r\n'
+        b'Cache-Control: no-store, no-cache, must-revalidate\r\n'
         b'Connection: close\r\n\r\n'
     )
     writer.write(body)
