@@ -16,6 +16,7 @@ import machine
 DEFAULTS = {
     "device_name":    "",
     "sport":          "baseball",
+    "console":        "daktronics",
     "uart_rx":        16,
     "uart_tx":        17,
     "use_dhcp":       True,

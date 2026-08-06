@@ -126,6 +126,7 @@ def _dashboard_html():
     uptime    = '{}h {}m {}s'.format(h, m, sec)
     free_kb   = gc.mem_free()  // 1024
     total_kb  = (gc.mem_free() + gc.mem_alloc()) // 1024
+    console   = score_data.get('console', 'daktronics')
     sport     = score_data.get('sport', '—')
     dev_name  = score_data.get('device_name', '—')
 
@@ -135,12 +136,21 @@ def _dashboard_html():
             '<span style="font-weight:500">{}</span>'
         ).format(label, value)
 
+    if console == 'colorado':
+        status_extra = (
+            row('Event', score_data.get('EventNumber', '—'))
+            + row('Heat',  score_data.get('HeatNumber', '—'))
+            + row('Clock', score_data.get('Clock', '—'))
+        )
+    else:
+        status_extra = row('Sport', sport)
+
     return (
         '<div class="card"><h2>Device Status</h2>'
         '<div style="display:grid;grid-template-columns:auto 1fr;gap:.5rem .75rem;font-size:.875rem">'
         + row('Device Name', dev_name)
         + row('IP Address', device_ip)
-        + row('Sport',      sport)
+        + status_extra
         + row('Version', '<span id="dash-ver">' + str(_version.VERSION) + '</span>')
         + row('MCU Temp',   temp)
         + row('Free RAM',   '{} KB / {} KB'.format(free_kb, total_kb))
@@ -185,6 +195,18 @@ def _mqtt_html(s):
 
 def _settings_html(saved=False):
     s = _settings.current
+    console_val = s.get('console', 'daktronics')
+    consoles = [
+        ('daktronics', 'Daktronics AllSport 5000'),
+        ('colorado',   'Colorado System 7 (Swim Timing)'),
+    ]
+    console_opts = ''.join(
+        '<option value="{}"{}>{}</option>'.format(
+            v, ' selected' if console_val == v else '', lbl
+        )
+        for v, lbl in consoles
+    )
+    sport_hidden = ' style="display:none"' if console_val == 'colorado' else ''
     sports = [
         ('baseball',       'Baseball'),
         ('basketball',     'Basketball'),
@@ -225,8 +247,18 @@ def _settings_html(saved=False):
         '<p class="note">Defaults to the device\'s MAC address if left blank.</p>'
         '</div>'
 
+        # ---- Console -----------------------------------------------------------
+        '<div class="card"><h2>Console</h2>'
+        '<label for="console_type">Console type</label>'
+        '<select name="console" id="console_type" '
+        'onchange="document.getElementById(\'sportcard\').style.display='
+        'this.value==\'colorado\'?\'none\':\'\';">'
+        + console_opts +
+        '</select>'
+        '</div>'
+
         # ---- Sport -----------------------------------------------------------
-        '<div class="card"><h2>Sport</h2>'
+        '<div class="card" id="sportcard"' + sport_hidden + '><h2>Sport</h2>'
         '<label for="sport">Active sport</label>'
         '<select name="sport" id="sport">' + opts + '</select>'
         '</div>'
@@ -256,7 +288,8 @@ def _settings_html(saved=False):
         '<div class="card"><h2>Serial</h2>'
         '<label>UART RX Pin (GPIO number)</label>'
         '<input type="number" name="uart_rx" value="' + str(s.get('uart_rx', 16)) + '">'
-        '<p class="note">Wire the AllSport 5000 RTD output (via MAX3232) to this GPIO. '
+        '<p class="note">Wire the active console\'s serial output (via MAX3232 level shifter) '
+        'to this GPIO — AllSport 5000 RTD, or Colorado System 7, depending on Console Type above. '
         'Reboot required after changing.</p>'
         '</div>'
 
@@ -330,6 +363,7 @@ async def _handle_settings_post(writer, body):
     form = _parse_form(body)
     _settings.save({
         'device_name':   form.get('device_name', _settings.current.get('device_name', '')),
+        'console':       form.get('console', _settings.current.get('console', 'daktronics')),
         'sport':         form.get('sport', _settings.DEFAULTS['sport']),
         'use_dhcp':      'use_dhcp' in form,
         'ip':            form.get('ip',        _settings.current.get('ip', '')),

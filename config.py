@@ -10,8 +10,9 @@
 # =============================================================================
 
 # --- UART hardware -----------------------------------------------------------
-UART_ID   = 1
-UART_BAUD = 19200   # AllSport 5000 RTD fixed baud rate
+UART_ID       = 1
+UART_BAUD     = 19200   # AllSport 5000 RTD fixed baud rate
+COLORADO_BAUD = 9600    # Colorado System 7 fixed baud rate
 
 # --- Ethernet (W5500 via SPI) ------------------------------------------------
 # On ESP32-S3, W5500 uses network.LAN(phy_type=network.PHY_W5500, ...).

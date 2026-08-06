@@ -12,7 +12,7 @@ set -e
 
 PORT=${1:?"Usage: $0 PORT   (e.g. $0 /dev/ttyACM0)"}
 FIRMWARE_DIR="/tmp/dakbot-firmware"
-FILES="config.py settings.py daktronics.py webserver.py mqtt_publisher.py updater.py version.py main.py daksports.json"
+FILES="config.py settings.py daktronics.py colorado.py webserver.py mqtt_publisher.py updater.py version.py main.py daksports.json"
 
 # 1. Install tools
 echo "==> Checking for esptool and mpremote..."

@@ -16,6 +16,7 @@ _FILES = [
     'config.py',
     'settings.py',
     'daktronics.py',
+    'colorado.py',
     'webserver.py',
     'mqtt_publisher.py',
     'main.py',

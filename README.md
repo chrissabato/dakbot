@@ -1,6 +1,6 @@
 # dakbot
 
-MicroPython firmware for the **Waveshare ESP32-S3-ETH** that reads live scoreboard data from a **Daktronics AllSport 5000** controller and serves it as JSON over Ethernet.
+MicroPython firmware for the **Waveshare ESP32-S3-ETH** that reads live scoreboard data from a **Daktronics AllSport 5000** controller, or live timing data from a **Colorado System 7** swim-timing console, and serves it as JSON over Ethernet.
 
 ![dakbot](https://chrissabato.com/20260416/20260416.jpg)
 ![dakbot](https://chrissabato.com/20260416/dakbot.jpg)
@@ -9,11 +9,16 @@ MicroPython firmware for the **Waveshare ESP32-S3-ETH** that reads live scoreboa
 
 ## How it works
 
-The AllSport 5000 continuously broadcasts **RTD (Real Time Data)** packets over a serial port at 19200 baud. Each packet encodes a position and a text value that slots into a fixed-width string buffer. Field names and their byte positions are defined in `daksports.json` for each supported sport.
+dakbot supports two consoles, selected via the **Console Type** setting:
 
-The ESP32 reads each packet over UART, updates the in-memory scoreboard state, and serves it as JSON on demand via a lightweight HTTP server. No SD card or file writes are needed — data lives in RAM and is always current.
+- **Daktronics AllSport 5000** — continuously broadcasts **RTD (Real Time Data)** packets over a serial port at 19200 baud. Each packet encodes a position and a text value that slots into a fixed-width string buffer. Field names and their byte positions are defined in `daksports.json` for each supported sport.
+- **Colorado System 7** (swim timing) — outputs a continuous, unframed byte stream at 9600 baud driving a display matrix (module-address bytes select a channel/segment, data bytes carry 7-segment-style values). dakbot decodes this into a fixed lane-based schema (event/heat number, running clock, and place/time per lane) — there's no `daksports.json`-style variant selection for this console, since the schema doesn't vary by sport.
 
-Supported sports: `baseball`, `basketball`, `volleyball`, `football`, `hockeylacrosse`
+The ESP32 reads the selected console's serial stream over UART, updates the in-memory scoreboard state, and serves it as JSON on demand via a lightweight HTTP server. No SD card or file writes are needed — data lives in RAM and is always current.
+
+Supported sports (Daktronics AllSport 5000): `baseball`, `basketball`, `volleyball`, `football`, `hockeylacrosse`
+
+Supported swim console: `Colorado System 7` (fixed 6-lane schema)
 
 ---
 
@@ -24,6 +29,8 @@ Supported sports: `baseball`, `basketball`, `volleyball`, `football`, `hockeylac
 - AllSport 5000 RTD serial output → MAX3232 level shifter → GPIO16
 
 > The AllSport 5000 outputs RS-232 voltage levels (±12 V). A level shifter such as the MAX3232 is required to convert to the 3.3 V logic the ESP32 expects. Connecting RS-232 directly will damage the board.
+
+> **Colorado System 7:** this repo assumes the console's serial output is also RS-232 and requires the same MAX3232 level-shifting approach — but this is **unconfirmed**. There's no documented connector pinout or voltage spec for the Colorado System 7 in this repo (unlike the AllSport 5000's DB25 pinout below). Confirm the actual output voltage and connector pinout on your specific unit before wiring it to the ESP32; connecting the wrong voltage level directly will damage the board.
 
 ### Serial cable
 
@@ -90,6 +97,14 @@ HTTP server listening on port 80
 Serial reader started
 ```
 
+With Console Type set to Colorado System 7, the sport/RTD lines are replaced with:
+
+```
+Console: Colorado System 7
+HTTP server listening on port 80
+Colorado reader started
+```
+
 Open `http://<ip-shown-above>/settings` in a browser to confirm the UI is up.
 
 ---
@@ -120,7 +135,8 @@ Navigate to `http://<device-ip>/settings` to configure the device without reflas
 
 | Setting | Notes |
 |---|---|
-| Sport | Updates field mapping immediately on next reboot |
+| Console Type | Daktronics AllSport 5000 or Colorado System 7 — reboot required |
+| Sport | Daktronics only; updates field mapping immediately on next reboot |
 | DHCP / Static IP | Reboot required |
 | HTTP Port | Reboot required |
 | UART RX Pin | GPIO wired to the MAX3232 output — reboot required |
@@ -168,6 +184,23 @@ Example response (baseball):
 }
 ```
 
+Example response (Colorado System 7):
+
+```json
+{
+    "EventNumber": "12",
+    "HeatNumber": "3",
+    "Clock": "1:23",
+    "Lane1Label": "1", "Lane1Place": "", "Lane1Time": "",
+    "Lane2Label": "2", "Lane2Place": "1", "Lane2Time": "58.32",
+    "Lane3Label": "3", "Lane3Place": "", "Lane3Time": "",
+    "Lane4Label": "4", "Lane4Place": "", "Lane4Time": "",
+    "Lane5Label": "5", "Lane5Place": "", "Lane5Time": "",
+    "Lane6Label": "6", "Lane6Place": "", "Lane6Time": "",
+    "console": "colorado"
+}
+```
+
 ---
 
 ## Files
@@ -175,7 +208,8 @@ Example response (baseball):
 | File | Purpose |
 |---|---|
 | `main.py` | Entry point — Ethernet init, async task runner |
-| `daktronics.py` | Async RTD serial parser (machine.UART) |
+| `daktronics.py` | Async AllSport 5000 RTD serial parser (machine.UART) |
+| `colorado.py` | Async Colorado System 7 serial parser (machine.UART) |
 | `webserver.py` | Minimal async HTTP server (uasyncio) |
 | `mqtt_publisher.py` | Optional async MQTT publisher (TLS, port 8883) |
 | `updater.py` | OTA updater — fetches project files from GitHub over HTTPS |

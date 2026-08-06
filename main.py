@@ -1,7 +1,8 @@
 # =============================================================================
-# main.py — ESP32-S3 Daktronics AllSport 5000 → JSON web server
+# main.py — ESP32-S3 Daktronics AllSport 5000 / Colorado System 7 → JSON web server
 #
-# Reads RTD serial data from a Daktronics AllSport 5000 scoreboard controller,
+# Reads serial data from a Daktronics AllSport 5000 scoreboard controller or a
+# Colorado System 7 swim-timing console (selected via the "console" setting),
 # parses it into a dict, and serves the current state as JSON over Ethernet.
 # A web UI at /settings allows configuration without reflashing.
 #
@@ -13,7 +14,8 @@
 #   Verify: import network; print(hasattr(network, 'PHY_W5500'))  # must be True
 #
 # Flash the following files to the device root (/):
-#   main.py, config.py, settings.py, daktronics.py, webserver.py, daksports.json
+#   main.py, config.py, settings.py, daktronics.py, colorado.py, webserver.py,
+#   daksports.json
 # =============================================================================
 
 import ujson
@@ -163,6 +165,7 @@ async def serial_reader_task(dak, sport_config, sport_name, mqtt_enabled=False):
                         new_data[key] = webserver.score_data[key]
 
             new_data['sport'] = sport_name
+            new_data['console'] = 'daktronics'
             webserver.score_data.update(new_data)
 
             # Signal MQTT publisher that fresh data is available
@@ -175,6 +178,26 @@ async def serial_reader_task(dak, sport_config, sport_name, mqtt_enabled=False):
             await asyncio.sleep_ms(500)
 
 
+async def colorado_reader_task(cw, mqtt_enabled=False):
+    """Read Colorado System 7 data continuously. update() only returns once
+    a meaningful field has changed (see colorado.py)."""
+    print('Colorado reader started')
+    while True:
+        try:
+            await cw.update()
+            new_data = cw.to_dict()
+            new_data['console'] = 'colorado'
+            webserver.score_data.update(new_data)
+
+            if mqtt_enabled:
+                import mqtt_publisher
+                mqtt_publisher.data_ready.set()
+
+        except Exception as e:
+            print('Colorado reader error:', e)
+            await asyncio.sleep_ms(500)
+
+
 # =============================================================================
 # Entry point
 # =============================================================================
@@ -182,35 +205,57 @@ async def main():
     # 1. Ethernet (reads network settings from settings.current)
     init_ethernet()
 
-    # 2. Load sport config from flash
-    with open('daksports.json') as f:
-        all_sports = ujson.load(f)
+    mqtt_enabled = bool(settings.current.get('mqtt_enabled'))
+    console_type = settings.current.get('console', 'daktronics')
 
-    sport_name   = settings.current['sport']
-    sport_config = all_sports[sport_name]
-    print('Sport:', sport_name, ' | RTD buffer:', sport_config['dakSize'][1], 'chars')
+    # 2. Initialise the selected console's serial parser
+    if console_type == 'colorado':
+        from colorado import Colorado
+        cw = Colorado(
+            uart_id=config.UART_ID,
+            rx_pin=settings.current['uart_rx'],
+            tx_pin=settings.current.get('uart_tx', 17),
+            baud=config.COLORADO_BAUD,
+        )
+        print('Console: Colorado System 7')
 
-    # 3. Initialise the Daktronics serial parser
-    dak = Daktronics(
-        sport_config,
-        uart_id=config.UART_ID,
-        rx_pin=settings.current['uart_rx'],
-        tx_pin=settings.current.get('uart_tx', 17),
-        baud=config.UART_BAUD,
-    )
+        # Seed score_data so the endpoint always returns valid JSON before first update
+        webserver.score_data = cw.to_dict()
+        webserver.score_data['console']     = 'colorado'
+        webserver.score_data['device_name'] = settings.device_name()
 
-    # 4. Seed score_data so the endpoint always returns valid JSON before first packet
-    webserver.score_data = {key: '' for key in sport_config}
-    webserver.score_data['sport'] = sport_name
-    webserver.score_data['device_name'] = settings.device_name()
+        reader = colorado_reader_task(cw, mqtt_enabled)
 
-    # 5. Run HTTP server and serial reader concurrently
+    else:
+        with open('daksports.json') as f:
+            all_sports = ujson.load(f)
+
+        sport_name   = settings.current['sport']
+        sport_config = all_sports[sport_name]
+        print('Sport:', sport_name, ' | RTD buffer:', sport_config['dakSize'][1], 'chars')
+
+        dak = Daktronics(
+            sport_config,
+            uart_id=config.UART_ID,
+            rx_pin=settings.current['uart_rx'],
+            tx_pin=settings.current.get('uart_tx', 17),
+            baud=config.UART_BAUD,
+        )
+
+        # Seed score_data so the endpoint always returns valid JSON before first packet
+        webserver.score_data = {key: '' for key in sport_config}
+        webserver.score_data['sport']       = sport_name
+        webserver.score_data['console']     = 'daktronics'
+        webserver.score_data['device_name'] = settings.device_name()
+
+        reader = serial_reader_task(dak, sport_config, sport_name, mqtt_enabled)
+
+    # 3. Run HTTP server and serial reader concurrently
     await webserver.start(port=settings.current.get('http_port', 80))
 
-    mqtt_enabled = bool(settings.current.get('mqtt_enabled'))
-    tasks = [asyncio.create_task(serial_reader_task(dak, sport_config, sport_name, mqtt_enabled))]
+    tasks = [asyncio.create_task(reader)]
 
-    # 6. Optionally start MQTT publisher
+    # 4. Optionally start MQTT publisher
     if mqtt_enabled:
         import mqtt_publisher
         tasks.append(asyncio.create_task(
