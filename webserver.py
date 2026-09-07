@@ -386,22 +386,8 @@ async def _do_update():
     """Background task: run updater then reboot. Runs after response is sent."""
     await asyncio.sleep_ms(500)   # ensure response is flushed first
     import updater
-    results = updater.update_all()
-    try:
-        with open('update_log.json', 'w') as f:
-            ujson.dump(results, f)
-    except Exception:
-        pass
+    updater.update_all()
     machine.reset()
-
-
-async def _handle_update_log(writer):
-    try:
-        with open('update_log.json') as f:
-            body = f.read()
-    except Exception:
-        body = '[]'
-    await _send(writer, b'200 OK', b'application/json', body)
 
 
 async def _handle_update(writer):
@@ -477,8 +463,6 @@ async def _handle_client(reader, writer):
             await _handle_settings_post(writer, body)
         elif base == '/update' and method == 'POST':
             await _handle_update(writer)
-        elif base == '/update-log' and method == 'GET':
-            await _handle_update_log(writer)
         elif base == '/reboot' and method == 'POST':
             await _handle_reboot(writer)
         else:
