@@ -131,11 +131,15 @@ def _process_baseball(data):
     data['top']    = '\u25b2' if tb == '\u25b2' else ''
     data['bottom'] = '\u25bc' if tb == '\u25bc' else ''
 
+def _process_football(data):
+    down, togo = data.get('Down', ''), data.get('ToGo', '')
+    data['DownAndDistance'] = '{} & {}'.format(down, togo) if down and togo else ''
+
 
 _SPORT_PROCESSORS = {
     'baseball': _process_baseball,
     # 'basketball': _process_basketball,
-    # 'football':   _process_football,
+    'football':   _process_football,
 }
 
 
