@@ -131,9 +131,28 @@ def _process_baseball(data):
     data['top']    = '\u25b2' if tb == '\u25b2' else ''
     data['bottom'] = '\u25bc' if tb == '\u25bc' else ''
 
+def _timeout_display(count_str):
+    """2 -> '——'; blank/non-numeric -> ''."""
+    try:
+        n = int(count_str)
+    except (ValueError, TypeError):
+        return ''
+    return '—' * n
+
+
 def _process_football(data):
     down, togo = data.get('Down', ''), data.get('ToGo', '')
     data['DownAndDistance'] = '{} & {}'.format(down, togo) if down and togo else ''
+
+    data['HomeTimeoutDisplay'] = _timeout_display(data.get('HomeTimeOutsLeft-Total', ''))
+    data['AwayTimeoutDisplay'] = _timeout_display(data.get('AwayTimeOutsLeft-Total', ''))
+
+    play_clock = data.get('PlayClockTime', '')
+    try:
+        under_10 = int(play_clock) < 10
+    except (ValueError, TypeError):
+        under_10 = False
+    data['PlayClockTimeAlert'] = play_clock if under_10 else ''
 
 
 _SPORT_PROCESSORS = {
