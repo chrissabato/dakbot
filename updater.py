@@ -26,11 +26,15 @@ _FILES = [
 ]
 
 
+_TIMEOUT = 10  # seconds
+
+
 def _fetch(filename):
     """Download a single file from GitHub over HTTPS. Returns bytes."""
     path = _BASE + filename
     addr = usocket.getaddrinfo(_HOST, 443, 0, usocket.SOCK_STREAM)[0][-1]
     sock = usocket.socket(usocket.AF_INET, usocket.SOCK_STREAM)
+    sock.settimeout(_TIMEOUT)
     try:
         sock.connect(addr)
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -45,12 +49,30 @@ def _fetch(filename):
         ).format(path, _HOST)
         sock.write(request.encode())
 
+        # Read exactly Content-Length bytes of body rather than reading until
+        # the connection closes — raw.githubusercontent.com (Fastly) doesn't
+        # always close the socket after an HTTP/1.0 response, which made the
+        # old "read until empty" loop hang indefinitely on some fetches.
+        # settimeout() above is a backstop in case Content-Length is missing
+        # or a read stalls outright.
         response = b''
+        header_end = -1
+        content_length = None
         while True:
             chunk = sock.read(4096)
             if not chunk:
                 break
             response += chunk
+
+            if header_end == -1:
+                header_end = response.find(b'\r\n\r\n')
+                if header_end != -1:
+                    for line in response[:header_end].decode().split('\r\n')[1:]:
+                        if line.lower().startswith('content-length:'):
+                            content_length = int(line.split(':', 1)[1].strip())
+
+            if content_length is not None and len(response) - (header_end + 4) >= content_length:
+                break
     finally:
         sock.close()
 
