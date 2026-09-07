@@ -1,2 +1,2 @@
 # Increment this whenever code is pushed that should trigger an OTA update prompt.
-VERSION = 11
+VERSION = 12
