@@ -308,15 +308,6 @@ function pills(board, items) {
   if (row.children.length) board.appendChild(row);
 }
 
-// hockeylacrosse field names have a numeric prefix — strip it for lookup
-function norm(d) {
-  const out = {};
-  for (const [k, v] of Object.entries(d)) {
-    out[k.replace(/^\d+/, '')] = v;
-  }
-  return out;
-}
-
 // Shared teams/score header
 function renderHeader(board, awayName, awayScore, homeScore, homeName) {
   const teams = e('div', 'teams');
@@ -378,7 +369,7 @@ function renderBaseball(board, d) {
 
 function renderBasketball(board, d) {
   renderHeader(board, d.AwayTeamName, d.AwayTeamScore, d.HomeTeamScore, d.HomeTeamName);
-  renderMeta(board, d.GameText, d['MainClockTime[mm:ss.t]'] || d['MainClockTime[mm:ssss.t]']);
+  renderMeta(board, d.GameText, d.MainClockTimeAlt || d.MainClockTime);
   pills(board, [
     ['Away Fouls', d.AwayTeamFouls],
     ['Away Bonus', d.AwayBonusText],
@@ -390,7 +381,7 @@ function renderBasketball(board, d) {
 
 function renderFootball(board, d) {
   renderHeader(board, d.AwayTeamName, d.AwayTeamScore, d.HomeTeamScore, d.HomeTeamName);
-  renderMeta(board, d.QuarterText, d['MainClockTime[mm:ss.t]'] || d['MainClockTime[mm:ssss.t]']);
+  renderMeta(board, d.QuarterText, d.MainClockTimeAlt || d.MainClockTime);
 
   // Down & distance situation
   const down = (d.Down || '').trim(), togo = (d.ToGo || '').trim(), ballon = (d.BallOn || '').trim();
@@ -432,15 +423,13 @@ function renderVolleyball(board, d) {
 }
 
 function renderHockey(board, d) {
-  // Strip numeric prefixes so field names match other sports
-  const n = norm(d);
-  renderHeader(board, n.AwayTeamName, n.AwayTeamScore, n.HomeTeamScore, n.HomeTeamName);
-  renderMeta(board, n.PeriodText, n['MainClockTime(mm:ss.t)'] || n['MainClockTime(mm:ssss.t)']);
+  renderHeader(board, d.AwayTeamName, d.AwayTeamScore, d.HomeTeamScore, d.HomeTeamName);
+  renderMeta(board, d.PeriodText, d.MainClockTimeAlt || d.MainClockTime);
   pills(board, [
-    ['Away Shots', n['AwayShotsOnGoal-Total']],
-    ['Home Shots', n['HomeShotsOnGoal-Total']],
-    ['Away Saves', n['AwaySaves-Total']],
-    ['Home Saves', n['HomeSaves-Total']],
+    ['Away Shots', d['AwayShotsOnGoal-Total']],
+    ['Home Shots', d['HomeShotsOnGoal-Total']],
+    ['Away Saves', d['AwaySaves-Total']],
+    ['Home Saves', d['HomeSaves-Total']],
   ]);
 }
 

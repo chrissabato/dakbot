@@ -1,0 +1,14 @@
+[Unit]
+Description=Dakbot MQTT device-state cache daemon
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/php /home/chrissabato/www/stats.chrissabato.com/html/mqtt-cache-daemon.php
+Restart=always
+RestartSec=2
+User=chrissabato
+
+[Install]
+WantedBy=multi-user.target

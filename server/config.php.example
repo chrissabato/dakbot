@@ -4,3 +4,8 @@ define('MQTT_HOST', 'localhost');
 define('MQTT_PORT', 1883);
 define('MQTT_USER', 'browser');
 define('MQTT_PASS', 'changeme');
+
+// Where mqtt-cache-daemon.php writes the live per-device state and api.php
+// reads it from. Kept outside the web root (one level above this file) so
+// it isn't served as a static file. The daemon creates this path if needed.
+define('CACHE_FILE', __DIR__ . '/../dakbot-cache/devices.json');
