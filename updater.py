@@ -9,6 +9,7 @@
 import uos
 import usocket
 import ssl
+import utime
 
 _HOST  = 'raw.githubusercontent.com'
 _BASE  = '/chrissabato/dakbot/main/'
@@ -31,7 +32,10 @@ _TIMEOUT = 10  # seconds
 
 def _fetch(filename):
     """Download a single file from GitHub over HTTPS. Returns bytes."""
-    path = _BASE + filename
+    # Cache-busting query string: raw.githubusercontent.com's CDN doesn't
+    # invalidate every edge instantly after a push, so a plain URL can
+    # serve a stale cached file for a while after the OTA prompt appears.
+    path = '{}{}?_={}'.format(_BASE, filename, utime.time())
     addr = usocket.getaddrinfo(_HOST, 443, 0, usocket.SOCK_STREAM)[0][-1]
     sock = usocket.socket(usocket.AF_INET, usocket.SOCK_STREAM)
     sock.settimeout(_TIMEOUT)
