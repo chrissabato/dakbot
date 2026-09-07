@@ -171,6 +171,17 @@ def apply_sport_processing(data, sport_name):
 # =============================================================================
 # Async tasks
 # =============================================================================
+# Fields excluded from the "keep last known non-empty value" fallback below —
+# these legitimately go blank as a normal state transition (not a serial
+# glitch), so sticking them would make them permanently latch to their first
+# non-blank value.
+_STICKY_EXCLUDED = (
+    'AwayAtBat', 'HomeAtBat',
+    'DownAndDistance', 'HomeTimeoutDisplay', 'AwayTimeoutDisplay',
+    'PlayClockTimeAlert',
+)
+
+
 async def serial_reader_task(dak, sport_config, sport_name, mqtt_enabled=False):
     """Read RTD packets continuously, yield between bytes for HTTP responsiveness."""
     print('Serial reader started')
@@ -183,7 +194,7 @@ async def serial_reader_task(dak, sport_config, sport_name, mqtt_enabled=False):
 
             # Keep last known non-empty value for fields that report blank mid-packet
             for key, val in new_data.items():
-                if key not in ('AwayAtBat', 'HomeAtBat'):
+                if key not in _STICKY_EXCLUDED:
                     if val == '' and key in webserver.score_data:
                         new_data[key] = webserver.score_data[key]
 
