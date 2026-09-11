@@ -36,6 +36,22 @@ DEFAULTS = {
 _FILE = "settings.json"
 current = {}
 
+# Real Ethernet MAC, set once by main.py's init_ethernet() via set_mac().
+# Falls back to the ESP32's efuse-derived unique_id() (a *different* address)
+# if Ethernet hasn't come up yet.
+_mac = None
+
+
+def set_mac(mac):
+    """Record the W5500's actual on-wire MAC address, once Ethernet is up."""
+    global _mac
+    _mac = bytes(mac)
+
+
+def mac_bytes():
+    """The effective MAC: the real Ethernet MAC if known, else the chip's unique_id()."""
+    return _mac if _mac is not None else machine.unique_id()
+
 
 def load():
     global current
@@ -59,7 +75,7 @@ def save(data):
 
 
 def _default_device_name():
-    return ':'.join('{:02X}'.format(b) for b in machine.unique_id())
+    return ':'.join('{:02X}'.format(b) for b in mac_bytes())
 
 
 def device_name():
@@ -68,7 +84,7 @@ def device_name():
 
 
 def _default_mqtt_topic():
-    mac = ''.join('{:02x}'.format(b) for b in machine.unique_id())
+    mac = ''.join('{:02x}'.format(b) for b in mac_bytes())
     return 'dakbot/score/' + mac
 
 

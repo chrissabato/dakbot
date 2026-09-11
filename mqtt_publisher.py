@@ -13,7 +13,6 @@ import uasyncio as asyncio
 import ujson
 import ssl
 import utime
-import machine
 import settings as _settings
 
 # Event set by serial_reader_task whenever score_data changes
@@ -21,8 +20,8 @@ data_ready = asyncio.Event()
 
 
 def _client_id():
-    """Unique per-device client ID: dakbot + MAC address, no separators."""
-    mac = ''.join('{:02x}'.format(b) for b in machine.unique_id())
+    """Unique per-device client ID: dakbot + Ethernet MAC address, no separators."""
+    mac = ''.join('{:02x}'.format(b) for b in _settings.mac_bytes())
     return ('dakbot_' + mac).encode()
 
 

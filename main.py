@@ -65,6 +65,11 @@ def init_ethernet():
 
     nic.active(True)
 
+    try:
+        settings.set_mac(nic.config('mac'))
+    except Exception as e:
+        print('WARNING: could not read Ethernet MAC:', e)
+
     s = settings.current
     if s.get('use_dhcp'):
         nic.ifconfig('dhcp')
