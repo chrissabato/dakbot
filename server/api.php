@@ -7,6 +7,15 @@
         if (is_array($decoded)) $devices = $decoded;
     }
 
+    // Drop devices that have gone silent for too long, and flag ones that
+    // are merely old so the dashboard can grey them out.
+    $now = time();
+    $devices = array_filter($devices, fn($d) => ($d['lastSeen'] ?? 0) >= $now - DEVICE_EXPIRE_SECONDS);
+    foreach ($devices as &$d) {
+        $d['stale'] = ($d['lastSeen'] ?? 0) < $now - DEVICE_STALE_SECONDS;
+    }
+    unset($d);
+
     header('Content-Type: application/json');
     header('Access-Control-Allow-Origin: *');
 

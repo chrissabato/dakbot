@@ -19,8 +19,14 @@ if (php_sapi_name() !== 'cli') {
 
 require __DIR__ . '/config.php';
 
+// Devices publish with retain=true, so without -R the broker would replay
+// every device's last message on every (re)connect, making a dead device
+// indistinguishable from one that just published. -R suppresses that
+// catch-up replay entirely — only genuine live publishes come through, so
+// lastSeen always reflects real activity. The on-disk cache (loaded below)
+// is what survives a daemon restart instead.
 $cmd = sprintf(
-    'stdbuf -oL mosquitto_sub -h %s -p %s -u %s -P %s -v -t %s',
+    'stdbuf -oL mosquitto_sub -R -h %s -p %s -u %s -P %s -v -t %s',
     escapeshellarg(MQTT_HOST),
     escapeshellarg((string) MQTT_PORT),
     escapeshellarg(MQTT_USER),
@@ -36,7 +42,13 @@ if (!$handle) {
 
 @mkdir(dirname(CACHE_FILE), 0700, true);
 
+// Seed from the existing cache (if any) so previously-recorded lastSeen
+// values survive a daemon restart instead of every device looking new.
 $devices = [];
+if (is_file(CACHE_FILE)) {
+    $existing = json_decode(file_get_contents(CACHE_FILE), true);
+    if (is_array($existing)) $devices = $existing;
+}
 
 while (($line = fgets($handle)) !== false) {
     $line = rtrim($line, "\n");
@@ -52,8 +64,14 @@ while (($line = fgets($handle)) !== false) {
     if (!is_array($decoded)) continue;
 
     $decoded['device'] = $m[1];
+    $decoded['lastSeen'] = time();
     ksort($decoded, SORT_STRING | SORT_FLAG_CASE);
     $devices[$m[1]] = $decoded;
+
+    // Drop devices that haven't published in a long time so the cache
+    // (and in-memory map) don't grow forever with decommissioned hardware.
+    $cutoff = time() - DEVICE_EXPIRE_SECONDS;
+    $devices = array_filter($devices, fn($d) => ($d['lastSeen'] ?? 0) >= $cutoff);
 
     $tmp = CACHE_FILE . '.tmp';
     file_put_contents($tmp, json_encode($devices));

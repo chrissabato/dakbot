@@ -9,3 +9,9 @@ define('MQTT_PASS', 'changeme');
 // reads it from. Kept outside the web root (one level above this file) so
 // it isn't served as a static file. The daemon creates this path if needed.
 define('CACHE_FILE', __DIR__ . '/../dakbot-cache/devices.json');
+
+// Devices are dropped from api.php's response once they haven't published
+// for this long, and flagged 'stale' (greyed out on the dashboard) once
+// they haven't published for DEVICE_STALE_SECONDS.
+define('DEVICE_STALE_SECONDS', 24 * 60 * 60);
+define('DEVICE_EXPIRE_SECONDS', 7 * 24 * 60 * 60);

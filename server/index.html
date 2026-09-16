@@ -36,6 +36,9 @@
     padding: 1rem 1.25rem;
     display: flex; flex-direction: column; gap: .6rem;
   }
+  .card.stale {
+    opacity: .45;
+  }
 
   .card-head {
     display: flex; align-items: center; justify-content: space-between;
@@ -79,6 +82,15 @@
     border-top: 1px solid #21262d; padding-top: .6rem;
   }
   .clock { font-variant-numeric: tabular-nums; font-weight: 800; }
+
+  .lanes {
+    display: flex; flex-direction: column; gap: .3rem;
+    border-top: 1px solid #21262d; padding-top: .6rem;
+  }
+  .lane-row { display: flex; align-items: center; gap: .5rem; font-size: .85rem; }
+  .lane-num   { opacity: .5; font-weight: 600; min-width: 1.4em; text-align: center; }
+  .lane-place { opacity: .6; min-width: 1.6em; text-align: center; }
+  .lane-time  { font-variant-numeric: tabular-nums; font-weight: 700; margin-left: auto; }
 
   #empty {
     text-align: center; opacity: .4; font-size: .9rem;
@@ -125,11 +137,9 @@ function clockFor(d) {
   return { period: d.GameText || d.QuarterText, clock: d.MainClockTimeAlt || d.MainClockTime };
 }
 
-function renderCard(d) {
-  const card = e('div', 'card');
-
+function cardHead(d, label, badgeText) {
   const head = e('div', 'card-head');
-  head.appendChild(e('span', 'device-id', d.device || 'unknown'));
+  head.appendChild(e('span', 'device-id', label));
 
   const right = e('div', 'card-head-right');
   const monitorLink = e('a', 'monitor-link', 'Monitor');
@@ -140,10 +150,38 @@ function renderCard(d) {
   jsonLink.target = '_blank';
   jsonLink.rel = 'noopener';
   right.appendChild(jsonLink);
-  right.appendChild(e('span', 'sport-badge', d.sport || '?'));
+  right.appendChild(e('span', 'sport-badge', badgeText));
   head.appendChild(right);
+  return head;
+}
 
-  card.appendChild(head);
+function renderColorado(d) {
+  const card = e('div', d.stale ? 'card stale' : 'card');
+  card.appendChild(cardHead(d, d.device_name || d.device || 'unknown', 'Swim'));
+
+  const meta = e('div', 'meta');
+  meta.appendChild(e('span', null, `Event ${d.EventNumber || '–'} · Heat ${d.HeatNumber || '–'}`));
+  meta.appendChild(e('span', 'clock', d.Clock || '—'));
+  card.appendChild(meta);
+
+  const lanes = e('div', 'lanes');
+  for (let ln = 1; ln <= 6; ln++) {
+    const time = d['Lane' + ln + 'Time'];
+    if (!time) continue;
+    const row = e('div', 'lane-row');
+    row.appendChild(e('span', 'lane-num', d['Lane' + ln + 'Label'] || ln));
+    row.appendChild(e('span', 'lane-place', d['Lane' + ln + 'Place'] || ''));
+    row.appendChild(e('span', 'lane-time', time));
+    lanes.appendChild(row);
+  }
+  card.appendChild(lanes.children.length ? lanes : e('div', null, 'Waiting for lane times…'));
+
+  return card;
+}
+
+function renderCard(d) {
+  const card = e('div', d.stale ? 'card stale' : 'card');
+  card.appendChild(cardHead(d, d.device || 'unknown', d.sport || '?'));
 
   const teams = e('div', 'teams');
   const awayScore = d.AwayTeamScore, homeScore = d.HomeTeamScore;
@@ -185,7 +223,7 @@ async function poll() {
 
     devices
       .sort((a, b) => (a.device || '').localeCompare(b.device || ''))
-      .forEach(d => $grid.appendChild(renderCard(d)));
+      .forEach(d => $grid.appendChild(d.console === 'colorado' ? renderColorado(d) : renderCard(d)));
 
     $status.textContent = `${devices.length} device${devices.length === 1 ? '' : 's'} · last updated ${new Date().toLocaleTimeString()}`;
   } catch (err) {

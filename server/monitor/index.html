@@ -433,6 +433,30 @@ function renderHockey(board, d) {
   ]);
 }
 
+function renderColorado(board, d) {
+  const meta = e('div', 'meta');
+  meta.appendChild(e('span', null, `Event ${d.EventNumber || '–'}  ·  Heat ${d.HeatNumber || '–'}`));
+  meta.appendChild(e('span', 'clock', d.Clock || '—'));
+  board.appendChild(meta);
+
+  const rows = [];
+  for (let ln = 1; ln <= 6; ln++) {
+    const time = d['Lane' + ln + 'Time'];
+    if (!time) continue;
+    rows.push([d['Lane' + ln + 'Label'] || ln, d['Lane' + ln + 'Place'] || '–', time]);
+  }
+  if (rows.length) {
+    const tbl = document.createElement('table');
+    tbl.className = 'hel-table';
+    tbl.innerHTML =
+      '<tr><th>Lane</th><th>Place</th><th>Time</th></tr>' +
+      rows.map(([label, place, time]) => `<tr><td>${label}</td><td>${place}</td><td>${time}</td></tr>`).join('');
+    board.appendChild(tbl);
+  } else {
+    board.appendChild(e('div', 'no-data', 'Waiting for lane times…'));
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Dispatch
 // ─────────────────────────────────────────────────────────────────────────────
@@ -446,6 +470,10 @@ const SPORT_RENDERERS = {
 
 function render(d) {
   $board.innerHTML = '';
+  if (d.console === 'colorado') {
+    renderColorado($board, d);
+    return;
+  }
   const fn = SPORT_RENDERERS[d.sport] || renderBaseball;
   fn($board, d);
 }
