@@ -55,14 +55,25 @@ class Colorado:
         self.event_number = ''
         self.heat_number  = ''
         self._pending_event_heat = None   # staged (event, heat) awaiting a second, confirming read
-        self._ch12_pass    = 0   # incremented on each fresh Channel 12 address byte (166/167/230/231)
-        self._pending_pass = -1  # _ch12_pass value when _pending_event_heat was staged
+        self._pending_pass = -1            # channel-12 pass when _pending_event_heat was staged
+
+        # Incremented per-channel on each fresh address byte selecting that
+        # channel — lets a value be confirmed against an independent later
+        # scan pass, not just a later byte (several data bytes typically
+        # follow one address byte within the same pass).
+        self._chan_pass = [0] * 32
 
         # Whether each lane has been observed fully blank since the last
         # heat reset. True at startup (self._time is already blank, so
         # there's nothing to wait for); a heat change sets its lane back
-        # to False until a genuine all-blank read is seen.
-        self._lane_seen_blank = [True] * (self.lanes + 1)
+        # to False until a genuine all-blank read is seen. This alone
+        # isn't sufficient protection (a transitional blank can itself be
+        # part of the same in-flux window as the garbage that follows it),
+        # so it's paired with the same pass-confirmation used for lanes
+        # below and already used for event/heat.
+        self._lane_seen_blank  = [True] * (self.lanes + 1)
+        self._lane_pending     = [None] * (self.lanes + 1)
+        self._lane_pending_pass = [-1] * (self.lanes + 1)
 
     # -------------------------------------------------------------------------
     def _reset_time(self):
@@ -121,8 +132,7 @@ class Colorado:
             self._lane_address = 169 < byte_val < 190
             self._sub     = byte_val & 0x01
             self._channel = ((byte_val >> 1) & 0x1f) ^ 0x1f
-            if self._channel == 12:
-                self._ch12_pass += 1
+            self._chan_pass[self._channel] += 1
 
         # ---------------------------------------------------------------
         # Data byte — splice one 4-bit nibble into the display matrix
@@ -196,7 +206,8 @@ class Colorado:
                 # (well under a second later); an isolated glitch burst
                 # essentially never reproduces the same wrong value again
                 # on a later, independent pass.
-                if self._ch12_pass == self._pending_pass:
+                pass_now = self._chan_pass[12]
+                if pass_now == self._pending_pass:
                     self._pending_event_heat = tmp
                 elif tmp == self._pending_event_heat:
                     tmp_event, tmp_heat = tmp
@@ -204,17 +215,20 @@ class Colorado:
                         self.event_number = tmp_event
                         self.heat_number  = tmp_heat
                         self._time = self._reset_time()
-                        # Require each lane to be observed properly blank
-                        # again before trusting new data for it — whatever
-                        # the console sends in the gap right after a heat
+                        # Require each lane to be observed properly blank,
+                        # and its next reading independently reconfirmed,
+                        # before trusting new data for it — whatever the
+                        # console sends in the gap right after a heat
                         # change, before it's ready with real per-lane
                         # data, shouldn't be displayed as if it were real.
-                        self._lane_seen_blank = [False] * (self.lanes + 1)
+                        self._lane_seen_blank   = [False] * (self.lanes + 1)
+                        self._lane_pending      = [None] * (self.lanes + 1)
+                        self._lane_pending_pass = [-1] * (self.lanes + 1)
                         changed = True
-                    self._pending_pass = self._ch12_pass
+                    self._pending_pass = pass_now
                 else:
                     self._pending_event_heat = tmp
-                    self._pending_pass = self._ch12_pass
+                    self._pending_pass = pass_now
 
         # ---------------------------------------------------------------
         # Running Time (Channel 0)
@@ -268,18 +282,30 @@ class Colorado:
                     tmp = (sec10 + sec01 + '.' + ten10 + ten01).strip()
 
                 # Don't trust a non-blank reading until this lane has been
-                # seen properly blank since the last heat reset — whatever
-                # the console sends in the gap right after advancing to a
-                # new heat, before it's ready with real data, otherwise
-                # gets displayed as if it were a real time (reported as
-                # "44", "44.44", "44:44.44" appearing before the clock
-                # restarts).
+                # seen properly blank since the last heat reset — but that
+                # alone isn't enough: the console's own internal state can
+                # race its serial output, so a channel mid-write at the
+                # exact moment of a heat transition can briefly reflect a
+                # blank-then-garbage sequence as one continuous in-flux
+                # window (reported as "44", "44.44", "44:44.44" landing on
+                # whichever lane happened to be mid-scan). So also require
+                # the value to be confirmed on an independent later pass
+                # (its own address byte), the same protection already
+                # applied to event/heat above.
                 if self._lane_seen_blank[ln]:
-                    self._time[ln][0] = str(self._display[ln][0]).strip()
-                    self._time[ln][1] = str(self._display[ln][1]).strip()
-                    if self._time[ln][2] != tmp:
-                        self._time[ln][2] = tmp
-                        changed = True
+                    pass_now = self._chan_pass[ln]
+                    if pass_now == self._lane_pending_pass[ln]:
+                        self._lane_pending[ln] = tmp
+                    elif tmp == self._lane_pending[ln]:
+                        self._time[ln][0] = str(self._display[ln][0]).strip()
+                        self._time[ln][1] = str(self._display[ln][1]).strip()
+                        if self._time[ln][2] != tmp:
+                            self._time[ln][2] = tmp
+                            changed = True
+                        self._lane_pending_pass[ln] = pass_now
+                    else:
+                        self._lane_pending[ln] = tmp
+                        self._lane_pending_pass[ln] = pass_now
 
             if min10 + min01 + sec10 + sec01 + ten10 + ten01 == '      ':
                 self._lane_seen_blank[ln] = True
