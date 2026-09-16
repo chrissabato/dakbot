@@ -1,12 +1,17 @@
 # =============================================================================
 # updater.py — OTA firmware update from GitHub
 #
-# Fetches each project file from the main branch of the GitHub repo and
-# writes it to flash.  settings.json is never touched.
+# Fetches each project file from the main branch of the GitHub repo into a
+# .tmp sibling; only once every file has downloaded successfully are they
+# renamed into place, so a failure partway through (e.g. a MemoryError on a
+# larger file) never leaves a broken mix of old and new files on flash —
+# version.py included, so the reported version always matches what's
+# actually installed. settings.json is never touched.
 # Uses raw sockets + TLS — no extra packages required.
 # =============================================================================
 
 import uos
+import gc
 import usocket
 import ssl
 import utime
@@ -28,6 +33,7 @@ _FILES = [
 
 
 _TIMEOUT = 10  # seconds
+_RETRIES = 2   # download attempts per file before giving up
 
 
 def _fetch_to(filename, dest):
@@ -108,24 +114,57 @@ def _fetch_to(filename, dest):
     return body_len
 
 
-def update_all():
-    """
-    Download and install all project files.
-    Returns a list of (filename, ok, detail) tuples.
-    detail is byte count on success, error string on failure.
-    """
-    results = []
-    for filename in _FILES:
-        tmp = filename + '.tmp'
+def _fetch_with_retry(filename):
+    """Download one file to `<filename>.tmp`, retrying up to _RETRIES times.
+    gc.collect() runs before each attempt — MemoryError here has
+    historically come from heap fragmentation on larger files (webserver.py,
+    daksports.json) while other async tasks are still live, not an outright
+    lack of free memory, so reclaiming what the previous attempt/file freed
+    is often enough for a retry to succeed."""
+    tmp = filename + '.tmp'
+    last_err = None
+    for _ in range(_RETRIES):
+        gc.collect()
         try:
             with open(tmp, 'wb') as f:
                 size = _fetch_to(filename, f)
-            uos.rename(tmp, filename)
-            results.append((filename, True, size))
+            return True, size
         except Exception as ex:
+            last_err = str(ex)
             try:
                 uos.remove(tmp)
             except Exception:
                 pass
-            results.append((filename, False, str(ex)))
-    return results
+    return False, last_err
+
+
+def update_all():
+    """
+    Download every file in _FILES to a .tmp sibling. Only if *all* of them
+    succeed are they renamed into place — a failure partway through leaves
+    the previous, fully-working fileset untouched rather than a broken mix
+    of old and new files (which could fail to even boot).
+
+    Returns (success, results): success is True only if every file was
+    committed; results is a list of (filename, ok, detail) tuples, detail
+    being a byte count on success or an error string on failure.
+    """
+    results = []
+    success = True
+    for filename in _FILES:
+        ok, detail = _fetch_with_retry(filename)
+        results.append((filename, ok, detail))
+        if not ok:
+            success = False
+
+    for filename in _FILES:
+        tmp = filename + '.tmp'
+        if success:
+            uos.rename(tmp, filename)
+        else:
+            try:
+                uos.remove(tmp)
+            except Exception:
+                pass
+
+    return success, results

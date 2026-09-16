@@ -110,7 +110,10 @@ _CSS = (
     '.note{font-size:.8rem;color:#888;margin-top:.6rem;line-height:1.4}'
     '.banner{padding:.75rem 1rem;border-radius:6px;margin-bottom:1rem;font-size:.875rem}'
     '.ok{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}'
+    '.err{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}'
 )
+
+_update_error = None   # set by _do_update() on a failed OTA; shown as a banner on /settings
 
 def _dashboard_html():
     import gc
@@ -226,6 +229,8 @@ def _settings_html(saved=False):
         '<div class="banner ok">Settings saved — reboot to apply network or pin changes.</div>'
         if saved else ''
     )
+    if _update_error:
+        banner += '<div class="banner err">' + _update_error + '</div>'
 
     return (
         '<!DOCTYPE html><html><head>'
@@ -321,6 +326,15 @@ def _settings_html(saved=False):
         '<p class="note" style="margin-top:.5rem">Downloads the latest code and reboots automatically. '
         'settings.json is preserved.</p>'
         '</form>'
+        '<form method="POST" action="/update" style="margin-top:.75rem"'
+        ' onsubmit="if(!confirm(\'Reinstall firmware from GitHub now, even though it reports up to date?\'))'
+        '{return false;}'
+        'this.querySelector(\'button\').disabled=true;'
+        'this.querySelector(\'button\').textContent=\'Updating…\';return true;">'
+        '<button type="submit" class="btn" style="background:#e5e7eb;color:#374151">Force Reinstall</button>'
+        '<p class="note" style="margin-top:.5rem">Re-downloads every file from GitHub and reboots, '
+        'regardless of the version check above. Useful if a previous update partially failed.</p>'
+        '</form>'
         '<script>'
         '(function(){'
         'var cur=' + str(_version.VERSION) + ';'
@@ -383,11 +397,24 @@ async def _handle_settings_post(writer, body):
 
 
 async def _do_update():
-    """Background task: run updater then reboot. Runs after response is sent."""
+    """Background task: run updater then reboot. Runs after response is sent.
+    Only reboots on a fully successful update — updater.update_all() leaves
+    the previous firmware untouched on flash if any file failed, so
+    rebooting on a partial failure would be safe too, but there's nothing to
+    gain by doing so and it'd cost the (functioning) old process."""
+    global _update_error
     await asyncio.sleep_ms(500)   # ensure response is flushed first
     import updater
-    updater.update_all()
-    machine.reset()
+    ok, results = updater.update_all()
+    if ok:
+        _update_error = None
+        machine.reset()
+    else:
+        failed = [f for f, file_ok, _ in results if not file_ok]
+        _update_error = (
+            'Update failed — previous firmware kept. Failed to fetch: ' + ', '.join(failed)
+        )
+        print('OTA update failed, not rebooting:', results)
 
 
 async def _handle_update(writer):
