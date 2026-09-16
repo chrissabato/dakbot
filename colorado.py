@@ -56,9 +56,17 @@ class Colorado:
 
     # -------------------------------------------------------------------------
     def _reset_time(self):
-        temp = [['', '', ''] for _ in range(self.lanes + 1)]
-        for line in range(self.lanes + 1):
-            temp[line][0] = str(line)
+        """Fresh Label/Place/Time rows for lanes 1..N, for a new heat.
+
+        Index 0 isn't a lane — to_dict() reads self._time[0][2] as the main
+        running Clock — and the clock runs independently of which heat is
+        showing, so it's preserved across the reset rather than rebuilt
+        blank like every other row. Rebuilding it here was wiping the
+        served Clock to '' on every event/heat change (rendered as '—' by
+        the dashboard/monitor pages), which happens routinely during a
+        meet."""
+        clock_row = self._time[0] if hasattr(self, '_time') else ['0', '', '']
+        temp = [clock_row] + [[str(line), '', ''] for line in range(1, self.lanes + 1)]
         return temp
 
     # -------------------------------------------------------------------------
