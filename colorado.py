@@ -58,6 +58,12 @@ class Colorado:
         self._ch12_pass    = 0   # incremented on each fresh Channel 12 address byte (166/167/230/231)
         self._pending_pass = -1  # _ch12_pass value when _pending_event_heat was staged
 
+        # Whether each lane has been observed fully blank since the last
+        # heat reset. True at startup (self._time is already blank, so
+        # there's nothing to wait for); a heat change sets its lane back
+        # to False until a genuine all-blank read is seen.
+        self._lane_seen_blank = [True] * (self.lanes + 1)
+
     # -------------------------------------------------------------------------
     def _reset_time(self):
         """Fresh Label/Place/Time rows for a new heat, matching the reference
@@ -198,6 +204,12 @@ class Colorado:
                         self.event_number = tmp_event
                         self.heat_number  = tmp_heat
                         self._time = self._reset_time()
+                        # Require each lane to be observed properly blank
+                        # again before trusting new data for it — whatever
+                        # the console sends in the gap right after a heat
+                        # change, before it's ready with real per-lane
+                        # data, shouldn't be displayed as if it were real.
+                        self._lane_seen_blank = [False] * (self.lanes + 1)
                         changed = True
                     self._pending_pass = self._ch12_pass
                 else:
@@ -255,13 +267,22 @@ class Colorado:
                 else:
                     tmp = (sec10 + sec01 + '.' + ten10 + ten01).strip()
 
-                self._time[ln][0] = str(self._display[ln][0]).strip()
-                self._time[ln][1] = str(self._display[ln][1]).strip()
-                if self._time[ln][2] != tmp:
-                    self._time[ln][2] = tmp
-                    changed = True
+                # Don't trust a non-blank reading until this lane has been
+                # seen properly blank since the last heat reset — whatever
+                # the console sends in the gap right after advancing to a
+                # new heat, before it's ready with real data, otherwise
+                # gets displayed as if it were a real time (reported as
+                # "44", "44.44", "44:44.44" appearing before the clock
+                # restarts).
+                if self._lane_seen_blank[ln]:
+                    self._time[ln][0] = str(self._display[ln][0]).strip()
+                    self._time[ln][1] = str(self._display[ln][1]).strip()
+                    if self._time[ln][2] != tmp:
+                        self._time[ln][2] = tmp
+                        changed = True
 
             if min10 + min01 + sec10 + sec01 + ten10 + ten01 == '      ':
+                self._lane_seen_blank[ln] = True
                 if self._time[ln][2] != '':
                     self._time[ln][2] = ''
                     changed = True
