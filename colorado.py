@@ -134,7 +134,15 @@ class Colorado:
         if not self._show_time:
             for i in range(1, 8):
                 self._display[ch][i] = ' '
-            if ch <= self.lanes:
+            # ch == 0 is the main clock, not a lane — the Running Time
+            # block below already handles it with its own gated logic
+            # (sec01 != ' '). Blanking self._time[0][2] here too raced
+            # with that gate: any channel-0 byte arriving while
+            # _show_time was False (set by *any* recent address byte,
+            # not necessarily channel 0's own) zeroed the served Clock
+            # string outright, showing up as the display flashing to
+            # dashes ('' renders as '—' on the dashboard/monitor pages).
+            if 1 <= ch <= self.lanes:
                 self._time[ch][2] = ''
                 self._time[ch][1] = ''
 
