@@ -112,9 +112,18 @@ class Colorado:
         # ---------------------------------------------------------------
         if byte_val < 128 and self._sub == 0:
             self._segment = (byte_val & 0xf0) >> 4
-            data = (byte_val << 4) & 0xf0
-            data >>= 4
-            data = ' ' if data == 0x00 else (data ^ 0x0f)
+            nibble = byte_val & 0x0f
+            data = ' ' if nibble == 0x00 else (nibble ^ 0x0f)
+            # Only nibbles 6-15 XOR to a valid digit (0-9); 1-5 XOR to
+            # 10-14, which isn't a legitimate value for any field this
+            # module builds from digit segments (running clock, lane
+            # times) — str()'ing it doubles that digit's width for one
+            # frame, which is exactly the transient "twice as long" clock
+            # glitch this guards against. Blank it instead so a stray
+            # nibble just blanks a digit for a frame rather than showing
+            # a two-character garbage value.
+            if isinstance(data, int) and data > 9:
+                data = ' '
             self._display[self._channel][self._segment] = data
 
         ch = self._channel
