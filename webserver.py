@@ -247,7 +247,7 @@ def _settings_html(saved=False):
         '<form method="POST" action="/settings">'
         '<div class="card"><h2>Identity</h2>'
         '<label>Device Name</label>'
-        '<input type="text" name="device_name" value="' + _settings.device_name() + '" '
+        '<input type="text" name="device_name" value="' + s.get('device_name', '') + '" '
         'placeholder="' + _settings._default_device_name() + '">'
         '<p class="note">Defaults to the device\'s MAC address if left blank.</p>'
         '</div>'
