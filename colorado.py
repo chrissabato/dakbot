@@ -55,6 +55,8 @@ class Colorado:
         self.event_number = ''
         self.heat_number  = ''
         self._pending_event_heat = None   # staged (event, heat) awaiting a second, confirming read
+        self._ch12_pass    = 0   # incremented on each fresh Channel 12 address byte (166/167/230/231)
+        self._pending_pass = -1  # _ch12_pass value when _pending_event_heat was staged
 
     # -------------------------------------------------------------------------
     def _reset_time(self):
@@ -113,6 +115,8 @@ class Colorado:
             self._lane_address = 169 < byte_val < 190
             self._sub     = byte_val & 0x01
             self._channel = ((byte_val >> 1) & 0x1f) ^ 0x1f
+            if self._channel == 12:
+                self._ch12_pass += 1
 
         # ---------------------------------------------------------------
         # Data byte — splice one 4-bit nibble into the display matrix
@@ -176,20 +180,29 @@ class Colorado:
                 # guard above, this can't be caught by validity checks
                 # alone) — briefly showing the wrong event/heat number and,
                 # worse, triggering the reset below on bogus data. Require
-                # the same value on two consecutive qualifying reads before
-                # committing it; a real change naturally repeats on the
-                # very next scan (well under a second later), while an
-                # isolated glitch essentially never reproduces the same
-                # wrong value twice in a row.
-                if tmp == self._pending_event_heat:
+                # the same value read on two separate scan passes (each
+                # marked by its own Channel 12 address byte) before
+                # committing it — comparing against the pass number, not
+                # just the previous byte, matters because a single corrupt
+                # stretch can span several data bytes within the *same*
+                # pass, which would otherwise "confirm" itself trivially.
+                # A real change naturally repeats on the very next pass
+                # (well under a second later); an isolated glitch burst
+                # essentially never reproduces the same wrong value again
+                # on a later, independent pass.
+                if self._ch12_pass == self._pending_pass:
+                    self._pending_event_heat = tmp
+                elif tmp == self._pending_event_heat:
                     tmp_event, tmp_heat = tmp
                     if self.event_number != tmp_event or self.heat_number != tmp_heat:
                         self.event_number = tmp_event
                         self.heat_number  = tmp_heat
                         self._time = self._reset_time()
                         changed = True
+                    self._pending_pass = self._ch12_pass
                 else:
                     self._pending_event_heat = tmp
+                    self._pending_pass = self._ch12_pass
 
         # ---------------------------------------------------------------
         # Running Time (Channel 0)
