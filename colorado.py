@@ -198,9 +198,17 @@ class Colorado:
             changed = True
 
         # ---------------------------------------------------------------
-        # Lane Times (Channels 0..lanes)
+        # Lane Times (Channels 1..lanes)
         # ---------------------------------------------------------------
-        if 0 <= ch <= self.lanes:
+        # Channel 0 is the main clock, not a lane, and is already fully
+        # handled by the gated Running Time block above. Including it here
+        # too (this block's all-blank check below has no gate at all)
+        # meant that whenever the "Blank out lane info" block above ran
+        # for channel 0 — any address byte 191/254/255, unrelated to
+        # event/heat — segments 2-7 all read blank and this directly
+        # cleared self._time[0][2] to '', bypassing the sec01 != ' ' gate
+        # that protects the Running Time block from exactly this.
+        if 1 <= ch <= self.lanes:
             ln = ch
             min10 = str(self._display[ln][2])
             min01 = str(self._display[ln][3])
