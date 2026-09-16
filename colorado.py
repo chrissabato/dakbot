@@ -44,6 +44,7 @@ class Colorado:
 
         self._display = [[' '] * 8 for _ in range(32)]   # Display[Channel][Segment]
         self._time    = self._reset_time()                # TIME[0..lanes] = [Label, Place, Time]
+        self._clock   = ''                                 # gated, publish-ready running clock
 
         self._show_time    = False
         self._lane_address = False
@@ -57,17 +58,14 @@ class Colorado:
 
     # -------------------------------------------------------------------------
     def _reset_time(self):
-        """Fresh Label/Place/Time rows for lanes 1..N, for a new heat.
-
-        Index 0 isn't a lane — to_dict() reads self._time[0][2] as the main
-        running Clock — and the clock runs independently of which heat is
-        showing, so it's preserved across the reset rather than rebuilt
-        blank like every other row. Rebuilding it here was wiping the
-        served Clock to '' on every event/heat change (rendered as '—' by
-        the dashboard/monitor pages), which happens routinely during a
-        meet."""
-        clock_row = self._time[0] if hasattr(self, '_time') else ['0', '', '']
-        temp = [clock_row] + [[str(line), '', ''] for line in range(1, self.lanes + 1)]
+        """Fresh Label/Place/Time rows for a new heat, matching the reference
+        script's resetTIME(). Rebuilding index 0 (not a real lane) here too
+        is harmless — self._clock (the actually-served Clock) is gated and
+        decoupled from this array, so a reset touching it has no external
+        effect; the next byte's Running Time block recomputes it anyway."""
+        temp = [['', '', ''] for _ in range(self.lanes + 1)]
+        for line in range(self.lanes + 1):
+            temp[line][0] = str(line)
         return temp
 
     # -------------------------------------------------------------------------
@@ -143,15 +141,11 @@ class Colorado:
         if not self._show_time:
             for i in range(1, 8):
                 self._display[ch][i] = ' '
-            # ch == 0 is the main clock, not a lane — the Running Time
-            # block below already handles it with its own gated logic
-            # (sec01 != ' '). Blanking self._time[0][2] here too raced
-            # with that gate: any channel-0 byte arriving while
-            # _show_time was False (set by *any* recent address byte,
-            # not necessarily channel 0's own) zeroed the served Clock
-            # string outright, showing up as the display flashing to
-            # dashes ('' renders as '—' on the dashboard/monitor pages).
-            if 1 <= ch <= self.lanes:
+            # Matches the reference script (Channel < 7). Reaching ch == 0
+            # here is harmless — self._clock is gated/decoupled (see the
+            # Running Time block), so clearing self._time[0][2] has no
+            # external effect.
+            if ch <= self.lanes:
                 self._time[ch][2] = ''
                 self._time[ch][1] = ''
 
@@ -212,20 +206,28 @@ class Colorado:
                 running_time = (sec10 + sec01).strip()
         if self._time[0][2] != running_time:
             self._time[0][2] = running_time
-            changed = True
+            # Only ever expose a fully-formed value (no embedded blank from
+            # a mid-scan torn read, e.g. one digit not updated yet this
+            # pass) as the served Clock — mirrors the reference Raspberry
+            # Pi script's `if RunningTime.find(' ') < 0: saveClock(...)`
+            # gate. That script tolerates the exact same unguarded decode
+            # this module inherited (no nibble validation, no last-segment
+            # gate on Channel 12, resets that touch this slot too) because
+            # nothing external ever reads the internal value directly —
+            # only this gated write actually publishes it. A blank/partial
+            # reading here just leaves the last known-good Clock in place.
+            if ' ' not in running_time and self._clock != running_time:
+                self._clock = running_time
+                changed = True
 
         # ---------------------------------------------------------------
-        # Lane Times (Channels 1..lanes)
+        # Lane Times (Channels 0..lanes)
         # ---------------------------------------------------------------
-        # Channel 0 is the main clock, not a lane, and is already fully
-        # handled by the gated Running Time block above. Including it here
-        # too (this block's all-blank check below has no gate at all)
-        # meant that whenever the "Blank out lane info" block above ran
-        # for channel 0 — any address byte 191/254/255, unrelated to
-        # event/heat — segments 2-7 all read blank and this directly
-        # cleared self._time[0][2] to '', bypassing the sec01 != ' ' gate
-        # that protects the Running Time block from exactly this.
-        if 1 <= ch <= self.lanes:
+        # Matches the reference script (0 <= Channel <= 6). Channel 0
+        # reaching this block and clearing self._time[0][2] is harmless —
+        # self._clock is gated/decoupled from this array (see the Running
+        # Time block above), so it's unaffected either way.
+        if 0 <= ch <= self.lanes:
             ln = ch
             min10 = str(self._display[ln][2])
             min01 = str(self._display[ln][3])
@@ -259,7 +261,7 @@ class Colorado:
         data = {
             'EventNumber': str(self.event_number),
             'HeatNumber':  str(self.heat_number),
-            'Clock':       str(self._time[0][2]),
+            'Clock':       str(self._clock),
         }
         for ln in range(1, self.lanes + 1):
             label, place, time_ = self._time[ln]
