@@ -226,7 +226,7 @@ def _settings_html(saved=False):
     chk    = ' checked' if s.get('use_dhcp') else ''
     hidden = ' style="display:none"' if s.get('use_dhcp') else ''
     banner = (
-        '<div class="banner ok">Settings saved — reboot to apply network or pin changes.</div>'
+        '<div class="banner ok">Settings saved — reboot to apply console, sport, network, or pin changes.</div>'
         if saved else ''
     )
     if _update_error:
@@ -304,7 +304,7 @@ def _settings_html(saved=False):
         # ---- Save ------------------------------------------------------------
         '<div class="card"><h2>Save</h2>'
         '<button type="submit" class="btn btn-primary">Save Settings</button>'
-        '<p class="note">Network and pin changes require a reboot to take effect.</p>'
+        '<p class="note">Console, sport, network, and pin changes require a reboot to take effect.</p>'
         '</div>'
         '</form>'
 

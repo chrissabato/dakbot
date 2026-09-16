@@ -63,10 +63,20 @@ class Colorado:
 
     # -------------------------------------------------------------------------
     async def _read_byte(self):
-        """Yield to event loop until one byte arrives, then return it."""
+        """Yield to event loop until one byte arrives, then return it.
+
+        Unlike a framed protocol (see daktronics.py), Colorado System 7
+        streams its full display matrix continuously even when nothing
+        visible has changed, so bytes are very often already available —
+        without the unconditional sleep_ms(0) below, this coroutine would
+        never actually suspend during those stretches, and update()'s loop
+        (which can run for a full second between exposed-field changes,
+        since the console keeps re-sending unchanged digits) would starve
+        the HTTP server task for that whole time."""
         while True:
             b = self.uart.read(1)
             if b:
+                await asyncio.sleep_ms(0)
                 return b
             await asyncio.sleep_ms(1)
 
