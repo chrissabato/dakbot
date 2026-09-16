@@ -399,21 +399,27 @@ async def _handle_settings_post(writer, body):
 async def _do_update():
     """Background task: run updater then reboot. Runs after response is sent.
     Only reboots on a fully successful update — updater.update_all() leaves
-    the previous firmware untouched on flash if any file failed, so
-    rebooting on a partial failure would be safe too, but there's nothing to
-    gain by doing so and it'd cost the (functioning) old process."""
+    the previous firmware untouched on flash if any file failed to
+    download, so rebooting on a partial failure would be safe too, but
+    there's nothing to gain by doing so and it'd cost the (functioning) old
+    process. update_all() is documented to never raise, but this task has
+    nothing else to catch an unexpected exception — one escaping silently
+    kills the task with no reboot and no error banner, which is worse than
+    a wrong-but-visible message, so it's wrapped defensively anyway."""
     global _update_error
     await asyncio.sleep_ms(500)   # ensure response is flushed first
     import updater
-    ok, results = updater.update_all()
+    try:
+        ok, results = updater.update_all()
+    except Exception as ex:
+        ok, results = False, [('(unexpected)', False, str(ex))]
+
     if ok:
         _update_error = None
         machine.reset()
     else:
-        failed = [f for f, file_ok, _ in results if not file_ok]
-        _update_error = (
-            'Update failed — previous firmware kept. Failed to fetch: ' + ', '.join(failed)
-        )
+        failed = [f for f, file_ok, detail in results if not file_ok]
+        _update_error = 'Update failed — firmware may be unchanged. Problem files: ' + ', '.join(failed)
         print('OTA update failed, not rebooting:', results)
 
 

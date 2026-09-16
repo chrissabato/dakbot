@@ -147,24 +147,37 @@ def update_all():
 
     Returns (success, results): success is True only if every file was
     committed; results is a list of (filename, ok, detail) tuples, detail
-    being a byte count on success or an error string on failure.
+    being a byte count on success, or an error string on failure — prefixed
+    with 'commit: ' if the failure happened while renaming into place
+    rather than while downloading. This function never raises: a commit
+    failure (rare — renames are metadata-only, but not impossible) stops
+    immediately and is reported like any other failure, rather than
+    propagating out of update_all() and silently killing the caller's
+    background task before it can reboot or report an error.
     """
     results = []
     success = True
     for filename in _FILES:
         ok, detail = _fetch_with_retry(filename)
-        results.append((filename, ok, detail))
+        results.append([filename, ok, detail])
         if not ok:
             success = False
 
-    for filename in _FILES:
-        tmp = filename + '.tmp'
-        if success:
-            uos.rename(tmp, filename)
-        else:
+    if not success:
+        for filename in _FILES:
             try:
-                uos.remove(tmp)
+                uos.remove(filename + '.tmp')
             except Exception:
                 pass
+        return False, [tuple(r) for r in results]
 
-    return success, results
+    for entry in results:
+        filename = entry[0]
+        try:
+            uos.rename(filename + '.tmp', filename)
+        except Exception as ex:
+            entry[1] = False
+            entry[2] = 'commit: ' + str(ex)
+            return False, [tuple(r) for r in results]
+
+    return True, [tuple(r) for r in results]
