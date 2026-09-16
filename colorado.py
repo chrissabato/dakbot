@@ -147,14 +147,22 @@ class Colorado:
         # Event / Heat number (Channel 12)
         # ---------------------------------------------------------------
         if ch == 12:
-            tmp_event = (str(self._display[12][1]) + str(self._display[12][2])).strip()
-            tmp_heat  = (str(self._display[12][6]) + str(self._display[12][7])).strip()
+            # Gate on the last segment of each field (mirrors sec01/ten01
+            # below) — without it, a byte that's landed mid-scan (only one
+            # of the two digits in event/heat updated so far this pass, or
+            # one blanked by the invalid-nibble guard above) reads as a
+            # mismatch against the committed number, triggering a spurious
+            # reset that wipes every lane/clock field to blank — visible as
+            # the whole display flashing to dashes.
+            if self._display[12][2] != ' ' and self._display[12][7] != ' ':
+                tmp_event = (str(self._display[12][1]) + str(self._display[12][2])).strip()
+                tmp_heat  = (str(self._display[12][6]) + str(self._display[12][7])).strip()
 
-            if self.event_number != tmp_event or self.heat_number != tmp_heat:
-                self.event_number = tmp_event
-                self.heat_number  = tmp_heat
-                self._time = self._reset_time()
-                changed = True
+                if self.event_number != tmp_event or self.heat_number != tmp_heat:
+                    self.event_number = tmp_event
+                    self.heat_number  = tmp_heat
+                    self._time = self._reset_time()
+                    changed = True
 
         # ---------------------------------------------------------------
         # Running Time (Channel 0)
