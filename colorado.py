@@ -53,6 +53,7 @@ class Colorado:
 
         self.event_number = ''
         self.heat_number  = ''
+        self._pending_event_heat = None   # staged (event, heat) awaiting a second, confirming read
 
     # -------------------------------------------------------------------------
     def _reset_time(self):
@@ -171,14 +172,30 @@ class Colorado:
             # reset that wipes every lane/clock field to blank — visible as
             # the whole display flashing to dashes.
             if self._display[12][2] != ' ' and self._display[12][7] != ' ':
-                tmp_event = (str(self._display[12][1]) + str(self._display[12][2])).strip()
-                tmp_heat  = (str(self._display[12][6]) + str(self._display[12][7])).strip()
+                tmp = (
+                    (str(self._display[12][1]) + str(self._display[12][2])).strip(),
+                    (str(self._display[12][6]) + str(self._display[12][7])).strip(),
+                )
 
-                if self.event_number != tmp_event or self.heat_number != tmp_heat:
-                    self.event_number = tmp_event
-                    self.heat_number  = tmp_heat
-                    self._time = self._reset_time()
-                    changed = True
+                # A misaligned/corrupted byte can decode to a plausible-
+                # looking but wrong digit (unlike the out-of-range nibble
+                # guard above, this can't be caught by validity checks
+                # alone) — briefly showing the wrong event/heat number and,
+                # worse, triggering the reset below on bogus data. Require
+                # the same value on two consecutive qualifying reads before
+                # committing it; a real change naturally repeats on the
+                # very next scan (well under a second later), while an
+                # isolated glitch essentially never reproduces the same
+                # wrong value twice in a row.
+                if tmp == self._pending_event_heat:
+                    tmp_event, tmp_heat = tmp
+                    if self.event_number != tmp_event or self.heat_number != tmp_heat:
+                        self.event_number = tmp_event
+                        self.heat_number  = tmp_heat
+                        self._time = self._reset_time()
+                        changed = True
+                else:
+                    self._pending_event_heat = tmp
 
         # ---------------------------------------------------------------
         # Running Time (Channel 0)
