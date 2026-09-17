@@ -39,6 +39,16 @@ class Colorado:
             parity=None,
             stop=1,
             timeout=0,        # non-blocking reads; we poll in the coroutine
+            # MicroPython's default UART rx buffer is small. mqtt_publisher.py
+            # calls into umqtt.simple, a synchronous library that does
+            # blocking socket/TLS I/O with no await yielding — on this
+            # single-threaded cooperative scheduler, that stalls every other
+            # task, including this one, for however long a publish/connect
+            # takes. At ~960 bytes/sec of continuous Colorado traffic, even a
+            # few tens of milliseconds of that can overflow a small buffer.
+            # A dedicated reference script with nothing else competing for
+            # CPU time never sees this; give real headroom here instead.
+            rxbuf=4096,
         )
         self.lanes = lanes
 
@@ -88,35 +98,45 @@ class Colorado:
         return temp
 
     # -------------------------------------------------------------------------
-    async def _read_byte(self):
-        """Yield to event loop until one byte arrives, then return it.
-
-        Unlike a framed protocol (see daktronics.py), Colorado System 7
-        streams its full display matrix continuously even when nothing
-        visible has changed, so bytes are very often already available —
-        without the unconditional sleep_ms(0) below, this coroutine would
-        never actually suspend during those stretches, and update()'s loop
-        (which can run for a full second between exposed-field changes,
-        since the console keeps re-sending unchanged digits) would starve
-        the HTTP server task for that whole time."""
-        while True:
-            b = self.uart.read(1)
-            if b:
-                await asyncio.sleep_ms(0)
-                return b
-            await asyncio.sleep_ms(1)
-
-    # -------------------------------------------------------------------------
     async def update(self):
         """
         Read and decode bytes until some externally-visible field (clock, a
         lane's label/place/time, or the event/heat number) changes, then
-        return. Yields to the event loop on every byte via _read_byte().
+        return.
+
+        Reads every byte currently sitting in the UART's buffer in one
+        uart.read(n) call and processes them in a tight loop, yielding only
+        once every 64 bytes rather than after each individual byte. An
+        earlier version yielded via asyncio.sleep_ms(0) after every single
+        byte, on the reasoning that Colorado System 7 streams continuously
+        (bytes are almost always already available), so without yielding
+        this coroutine would never actually suspend and would starve the
+        HTTP server / MQTT publisher tasks. That reasoning about needing to
+        yield was right, but yielding on every byte went too far the other
+        way: confirmed live, at ~960 bytes/sec (9600 baud) the scheduler
+        round-trip cost of a yield-and-reschedule on every single byte is
+        itself slower than bytes arrive, so this task could never keep up
+        once any other task existed to compete for the rescheduling slot —
+        the UART's receive buffer was measured climbing to its full 4096-byte
+        cap and staying pinned there, tracking whole seconds behind
+        real time. Batching the read and yielding periodically instead
+        keeps the same fairness (still yields regularly, still bounded
+        per-batch by rxbuf) while cutting the number of yields ~64x.
         """
         changed = False
         while not changed:
-            b = await self._read_byte()
-            changed = self._process_byte(b[0])
+            avail = self.uart.any()
+            if avail:
+                chunk = self.uart.read(avail)
+                if chunk:
+                    for i, byte_val in enumerate(chunk):
+                        if self._process_byte(byte_val):
+                            changed = True
+                        if i % 64 == 63:
+                            await asyncio.sleep_ms(0)
+                await asyncio.sleep_ms(0)
+            else:
+                await asyncio.sleep_ms(1)
 
     # -------------------------------------------------------------------------
     def _process_byte(self, byte_val):
@@ -238,7 +258,23 @@ class Colorado:
         sec10 = str(self._display[0][4])
         sec01 = str(self._display[0][5])
         running_time = self._time[0][2]
-        if sec01 != ' ':
+        # Gate on having just written segment 5 (sec01) — the last of the
+        # 4 segments (min10, min01, sec10, sec01) that make up the clock,
+        # sent in that order every pass. Without this, the block below
+        # re-evaluates on *every* byte, including mid-write while only
+        # some of those 4 segments have this pass's fresh digits and the
+        # rest still hold the previous pass's — e.g. min10/min01 freshly
+        # rewritten but sec10/sec01 not yet, or vice versa. That torn mix
+        # committing as a real reading is confirmed live: a real update
+        # visibly went through the exact sequence '44:40' -> '44:44' ->
+        # '4:44' -> '44', one spurious commit per segment write, before
+        # settling — never a wire/decode problem, since sec10 always
+        # legitimately holds *some* non-blank digit throughout (unlike
+        # the invalid-nibble case the sec10-blank check above guards
+        # against), so nothing here was blank enough to reject. Lanes and
+        # event/heat already gate on their own last segment for exactly
+        # this reason; Clock never got the same treatment.
+        if ch == 0 and self._segment == 5 and sec01 != ' ' and sec10 != ' ':
             if min01 != ' ':
                 running_time = (min10 + min01 + ':' + sec10 + sec01).strip()
             else:
@@ -275,12 +311,26 @@ class Colorado:
             ten10 = str(self._display[ln][6])
             ten01 = str(self._display[ln][7])
 
-            if ten01 != ' ':
+            # Require sec10 too, not just ten01 — same leading-blank/torn-
+            # read loophole as the Running Time block above (see its
+            # comment): sec10 is never legitimately blank, but sitting at
+            # position 0 of the min01==' ' branch's string, a blanked/not-
+            # yet-written sec10 gets silently stripped, e.g. " 4.44"
+            # becomes "4.44" — a real-looking but truncated value that
+            # would otherwise defeat the ' ' not in tmp check below (the
+            # blank it's meant to catch is already gone).
+            if ten01 != ' ' and sec10 != ' ':
                 if min01 != ' ':
                     tmp = (min10 + min01 + ':' + sec10 + sec01 + '.' + ten10 + ten01).strip()
                 else:
                     tmp = (sec10 + sec01 + '.' + ten10 + ten01).strip()
+            else:
+                tmp = None
 
+            # Reject any remaining internal blank (e.g. a torn ten10) — this
+            # module's own equivalent of the Running Time block's "fully-
+            # formed value" gate, which lane times never had.
+            if tmp is not None and ' ' not in tmp:
                 # Don't trust a non-blank reading until this lane has been
                 # seen properly blank since the last heat reset — but that
                 # alone isn't enough: the console's own internal state can
@@ -293,23 +343,53 @@ class Colorado:
                 # (its own address byte), the same protection already
                 # applied to event/heat above.
                 if self._lane_seen_blank[ln]:
+                    # Place rides along with Time here rather than getting
+                    # its own gate — but reading it straight from
+                    # self._display, unconditionally, the instant Time's
+                    # check passes, was never actually safe: that segment
+                    # gets the same nibble decode as everything else, so a
+                    # corrupted-but-valid nibble on segment 1 (e.g. landing
+                    # on digit 4) sails through with no validation and no
+                    # cross-pass confirmation of its own — confirmed live:
+                    # Lane2Place briefly read "4" while Lane2Time stayed
+                    # correctly blank. Folding it into the same pending
+                    # tuple as Time means both must agree across two
+                    # independent passes together, closing that gap the
+                    # same way event/heat's (event, heat) tuple already
+                    # does. Label isn't tracked from the wire at all (see
+                    # to_dict()) — it's always the fixed lane number, never
+                    # real independent data, so there's nothing to confirm.
+                    place = str(self._display[ln][1]).strip()
+                    reading = (place, tmp)
                     pass_now = self._chan_pass[ln]
                     if pass_now == self._lane_pending_pass[ln]:
-                        self._lane_pending[ln] = tmp
-                    elif tmp == self._lane_pending[ln]:
-                        self._time[ln][0] = str(self._display[ln][0]).strip()
-                        self._time[ln][1] = str(self._display[ln][1]).strip()
+                        self._lane_pending[ln] = reading
+                    elif reading == self._lane_pending[ln]:
+                        if self._time[ln][1] != place:
+                            self._time[ln][1] = place
+                            changed = True
                         if self._time[ln][2] != tmp:
                             self._time[ln][2] = tmp
                             changed = True
                         self._lane_pending_pass[ln] = pass_now
                     else:
-                        self._lane_pending[ln] = tmp
+                        self._lane_pending[ln] = reading
                         self._lane_pending_pass[ln] = pass_now
 
             if min10 + min01 + sec10 + sec01 + ten10 + ten01 == '      ':
                 self._lane_seen_blank[ln] = True
-                if self._time[ln][2] != '':
+                # Reset Place along with Time: this protocol never has a
+                # place without an accompanying time, so once the time
+                # segments genuinely go blank, a leftover Place is stale
+                # (or was corrupted-but-confirmed garbage in the first
+                # place — see the pending-tuple comment above) either way,
+                # not real data worth keeping. Previously only Time got
+                # cleared here, which is exactly why a corrupted Place
+                # could get stuck showing garbage indefinitely: with no
+                # new finish ever coming in for that lane (e.g. sitting
+                # pre-start), nothing else would ever touch it again.
+                if self._time[ln][1] != '' or self._time[ln][2] != '':
+                    self._time[ln][1] = ''
                     self._time[ln][2] = ''
                     changed = True
 
