@@ -277,13 +277,20 @@ class Colorado:
         # committing as a real reading is confirmed live: a real update
         # visibly went through the exact sequence '44:40' -> '44:44' ->
         # '4:44' -> '44', one spurious commit per segment write, before
-        # settling — never a wire/decode problem, since sec10 always
-        # legitimately holds *some* non-blank digit throughout (unlike
-        # the invalid-nibble case the sec10-blank check above guards
-        # against), so nothing here was blank enough to reject. Lanes and
-        # event/heat already gate on their own last segment for exactly
-        # this reason; Clock never got the same treatment.
-        if ch == 0 and self._segment == 5 and sec01 != ' ' and sec10 != ' ':
+        # settling. Lanes and event/heat already gate on their own last
+        # segment for exactly this reason; Clock never got the same
+        # treatment. Unlike sec01, sec10 is NOT required to be present —
+        # confirmed live, the console legitimately blanks tens-of-seconds
+        # under 10 real seconds, same as it blanks tens-of-minutes under
+        # 10 minutes (e.g. a freshly reset "0:00" reads sec10=' ',
+        # sec01='0'). An earlier version of this gate required sec10 too,
+        # reasoning it could never be legitimately blank — which was
+        # itself a mitigation for a torn-read bug whose real cause (UART
+        # byte loss under scheduling load) is now fixed properly, and
+        # that extra requirement was left behind permanently blocking any
+        # sub-10-second reading, including every reset, from ever
+        # publishing.
+        if ch == 0 and self._segment == 5 and sec01 != ' ':
             if min01 != ' ':
                 running_time = (min10 + min01 + ':' + sec10 + sec01).strip()
             else:
@@ -354,15 +361,19 @@ class Colorado:
             ten10 = str(self._display[ln][6])
             ten01 = str(self._display[ln][7])
 
-            # Require sec10 too, not just ten01 — same leading-blank/torn-
-            # read loophole as the Running Time block above (see its
-            # comment): sec10 is never legitimately blank, but sitting at
-            # position 0 of the min01==' ' branch's string, a blanked/not-
-            # yet-written sec10 gets silently stripped, e.g. " 4.44"
-            # becomes "4.44" — a real-looking but truncated value that
-            # would otherwise defeat the ' ' not in tmp check below (the
-            # blank it's meant to catch is already gone).
-            if ten01 != ' ' and sec10 != ' ':
+            # sec10 is NOT required to be present, even though a blank
+            # there sits at position 0 of the min01==' ' branch's string
+            # and gets silently eaten by .strip() below — confirmed live,
+            # sec10 is legitimately blank for any real time under 10
+            # seconds (e.g. a lane time of "4.44" genuinely has sec10
+            # blank), the same way min10 is legitimately blank under 10
+            # minutes. An earlier version required it, reasoning a torn
+            # read was the only way it could be blank; that reasoning
+            # doesn't hold once you allow for real sub-10-second times,
+            # and the real torn-read protection here is the two-pass
+            # cross-confirmation below (and the ' ' not in tmp check),
+            # not this.
+            if ten01 != ' ':
                 if min01 != ' ':
                     tmp = (min10 + min01 + ':' + sec10 + sec01 + '.' + ten10 + ten01).strip()
                 else:
