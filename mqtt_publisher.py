@@ -10,10 +10,10 @@
 # =============================================================================
 
 import uasyncio as asyncio
-import ujson
 import ssl
 import utime
 import settings as _settings
+import webserver as _webserver
 
 # Event set by serial_reader_task whenever score_data changes
 data_ready = asyncio.Event()
@@ -79,7 +79,7 @@ async def run(get_score):
                 # Publish if data changed
                 score = get_score()
                 if score:
-                    payload = ujson.dumps(score).encode()
+                    payload = _webserver.dumps_sorted(score).encode()
                     if payload != last_payload:
                         client.publish(topic, payload, retain=True)
                         last_payload = payload

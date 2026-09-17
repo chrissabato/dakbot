@@ -21,6 +21,25 @@ score_data = {}
 device_ip  = '—'          # set by main.py after Ethernet connects
 _boot_ms   = utime.ticks_ms()
 
+
+def dumps_sorted(d):
+    """JSON-encode a flat dict with keys in sorted order.
+
+    Unlike CPython 3.7+, MicroPython's dict does not preserve insertion
+    order — dict(sorted(d.items())) sorts the intermediate list correctly,
+    but wrapping it back into a dict discards that order again, and
+    ujson.dumps() then just follows the dict's own (unordered) internal
+    iteration order. Building the JSON text directly from the sorted list
+    of pairs sidesteps dict ordering entirely: ujson.dumps() is only used
+    here to correctly escape each individual key/value, while the actual
+    assembly order comes from the list, which (unlike a dict) always
+    preserves the order it's given.
+    """
+    return '{' + ','.join(
+        ujson.dumps(k) + ':' + ujson.dumps(v) for k, v in sorted(d.items())
+    ) + '}'
+
+
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -489,7 +508,8 @@ async def _handle_client(reader, writer):
         saved = 'saved=1' in path
 
         if base in ('/', '/data'):
-            await _send(writer, b'200 OK', b'application/json', ujson.dumps([score_data]))
+            await _send(writer, b'200 OK', b'application/json',
+                        '[' + dumps_sorted(score_data) + ']')
         elif base == '/settings' and method == 'GET':
             await _handle_settings_get(writer, saved=saved)
         elif base == '/settings' and method == 'POST':

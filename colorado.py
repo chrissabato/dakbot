@@ -85,6 +85,13 @@ class Colorado:
         self._lane_pending     = [None] * (self.lanes + 1)
         self._lane_pending_pass = [-1] * (self.lanes + 1)
 
+        # Label/Place pending state — separate from _lane_pending above
+        # (Time), since they're confirmed on their own trigger (segment 1)
+        # independent of whether a time is present. See the Label + Place
+        # block in _process_byte for why they need their own gate.
+        self._lane_lp_pending      = [None] * (self.lanes + 1)
+        self._lane_lp_pending_pass = [-1] * (self.lanes + 1)
+
     # -------------------------------------------------------------------------
     def _reset_time(self):
         """Fresh Label/Place/Time rows for a new heat, matching the reference
@@ -244,6 +251,8 @@ class Colorado:
                         self._lane_seen_blank   = [False] * (self.lanes + 1)
                         self._lane_pending      = [None] * (self.lanes + 1)
                         self._lane_pending_pass = [-1] * (self.lanes + 1)
+                        self._lane_lp_pending      = [None] * (self.lanes + 1)
+                        self._lane_lp_pending_pass = [-1] * (self.lanes + 1)
                         changed = True
                     self._pending_pass = pass_now
                 else:
@@ -304,6 +313,40 @@ class Colorado:
         # Time block above), so it's unaffected either way.
         if 0 <= ch <= self.lanes:
             ln = ch
+
+            # Label + Place (segments 0, 1) are sent every refresh cycle
+            # regardless of whether this lane currently has a time —
+            # unlike Time below, which only appears once a finish comes
+            # in. Gating them on Time's own trigger (as both the
+            # reference script and an earlier version of this module did)
+            # meant a lane with no time yet this heat — the normal
+            # pre-race state for every lane — never had its Label/Place
+            # read at all, leaving them frozen at whatever _reset_time()
+            # last initialized them to. Confirmed live: Lane1Label stayed
+            # stuck at "1" indefinitely instead of reflecting the console
+            # (e.g. going blank when a lane is disabled/off). Segment 1
+            # (place) is the byte immediately after segment 0 (label) in
+            # transmission order, so triggering on it guarantees label
+            # was already freshly written this same pass.
+            if self._segment == 1:
+                label = str(self._display[ln][0]).strip()
+                place = str(self._display[ln][1]).strip()
+                lp_reading = (label, place)
+                lp_pass_now = self._chan_pass[ln]
+                if lp_pass_now == self._lane_lp_pending_pass[ln]:
+                    self._lane_lp_pending[ln] = lp_reading
+                elif lp_reading == self._lane_lp_pending[ln]:
+                    if self._time[ln][0] != label:
+                        self._time[ln][0] = label
+                        changed = True
+                    if self._time[ln][1] != place:
+                        self._time[ln][1] = place
+                        changed = True
+                    self._lane_lp_pending_pass[ln] = lp_pass_now
+                else:
+                    self._lane_lp_pending[ln] = lp_reading
+                    self._lane_lp_pending_pass[ln] = lp_pass_now
+
             min10 = str(self._display[ln][2])
             min01 = str(self._display[ln][3])
             sec10 = str(self._display[ln][4])
@@ -343,53 +386,21 @@ class Colorado:
                 # (its own address byte), the same protection already
                 # applied to event/heat above.
                 if self._lane_seen_blank[ln]:
-                    # Place rides along with Time here rather than getting
-                    # its own gate — but reading it straight from
-                    # self._display, unconditionally, the instant Time's
-                    # check passes, was never actually safe: that segment
-                    # gets the same nibble decode as everything else, so a
-                    # corrupted-but-valid nibble on segment 1 (e.g. landing
-                    # on digit 4) sails through with no validation and no
-                    # cross-pass confirmation of its own — confirmed live:
-                    # Lane2Place briefly read "4" while Lane2Time stayed
-                    # correctly blank. Folding it into the same pending
-                    # tuple as Time means both must agree across two
-                    # independent passes together, closing that gap the
-                    # same way event/heat's (event, heat) tuple already
-                    # does. Label isn't tracked from the wire at all (see
-                    # to_dict()) — it's always the fixed lane number, never
-                    # real independent data, so there's nothing to confirm.
-                    place = str(self._display[ln][1]).strip()
-                    reading = (place, tmp)
                     pass_now = self._chan_pass[ln]
                     if pass_now == self._lane_pending_pass[ln]:
-                        self._lane_pending[ln] = reading
-                    elif reading == self._lane_pending[ln]:
-                        if self._time[ln][1] != place:
-                            self._time[ln][1] = place
-                            changed = True
+                        self._lane_pending[ln] = tmp
+                    elif tmp == self._lane_pending[ln]:
                         if self._time[ln][2] != tmp:
                             self._time[ln][2] = tmp
                             changed = True
                         self._lane_pending_pass[ln] = pass_now
                     else:
-                        self._lane_pending[ln] = reading
+                        self._lane_pending[ln] = tmp
                         self._lane_pending_pass[ln] = pass_now
 
             if min10 + min01 + sec10 + sec01 + ten10 + ten01 == '      ':
                 self._lane_seen_blank[ln] = True
-                # Reset Place along with Time: this protocol never has a
-                # place without an accompanying time, so once the time
-                # segments genuinely go blank, a leftover Place is stale
-                # (or was corrupted-but-confirmed garbage in the first
-                # place — see the pending-tuple comment above) either way,
-                # not real data worth keeping. Previously only Time got
-                # cleared here, which is exactly why a corrupted Place
-                # could get stuck showing garbage indefinitely: with no
-                # new finish ever coming in for that lane (e.g. sitting
-                # pre-start), nothing else would ever touch it again.
-                if self._time[ln][1] != '' or self._time[ln][2] != '':
-                    self._time[ln][1] = ''
+                if self._time[ln][2] != '':
                     self._time[ln][2] = ''
                     changed = True
 
