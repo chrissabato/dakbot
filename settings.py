@@ -31,6 +31,11 @@ DEFAULTS = {
     "mqtt_user":      "",
     "mqtt_password":  "",
     "mqtt_topic":     "",
+    "vmix_enabled":   False,
+    "vmix_host":      "",
+    "vmix_port":      8099,
+    "vmix_input":     "",
+    "vmix_field":     "Clock.Text",
 }
 
 _FILE = "settings.json"

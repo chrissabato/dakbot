@@ -25,6 +25,7 @@ _FILES = [
     'colorado.py',
     'webserver.py',
     'mqtt_publisher.py',
+    'vmix.py',
     'main.py',
     'daksports.json',
     'updater.py',

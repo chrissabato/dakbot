@@ -215,6 +215,36 @@ def _mqtt_html(s):
     )
 
 
+def _vmix_html(s, console_val):
+    chk     = ' checked' if s.get('vmix_enabled') else ''
+    hidden  = '' if s.get('vmix_enabled') else ' style="display:none"'
+    card_hidden = '' if console_val == 'colorado' else ' style="display:none"'
+    return (
+        '<div class="card" id="vmixcard"' + card_hidden + '><h2>vMix Clock</h2>'
+        '<div class="check-row">'
+        '<input type="checkbox" name="vmix_enabled" id="vmix_en"' + chk +
+        ' onchange="document.getElementById(\'vmixcfg\').style.display=this.checked?\'\':\'none\';">'
+        '<label for="vmix_en">Push clock to vMix</label>'
+        '</div>'
+        '<div id="vmixcfg"' + hidden + '>'
+        '<label>vMix host</label>'
+        '<input type="text" name="vmix_host" value="' + s.get('vmix_host', '') + '" '
+        'placeholder="192.168.1.50">'
+        '<label>TCP API port</label>'
+        '<input type="number" name="vmix_port" value="' + str(s.get('vmix_port', 8099)) + '">'
+        '<label>Title input (name, number, or key)</label>'
+        '<input type="text" name="vmix_input" value="' + s.get('vmix_input', '') + '" '
+        'placeholder="Swim Clock">'
+        '<label>Field name</label>'
+        '<input type="text" name="vmix_field" value="' + s.get('vmix_field', 'Clock.Text') + '" '
+        'placeholder="Clock.Text">'
+        '<p class="note">Sends SetText over vMix\'s TCP API the instant the clock changes, '
+        'instead of waiting for a Data Source poll. Reboot required after changing.</p>'
+        '</div>'
+        '</div>'
+    )
+
+
 def _settings_html(saved=False):
     s = _settings.current
     console_val = s.get('console', 'daktronics')
@@ -276,7 +306,9 @@ def _settings_html(saved=False):
         '<label for="console_type">Console type</label>'
         '<select name="console" id="console_type" '
         'onchange="document.getElementById(\'sportcard\').style.display='
-        'this.value==\'colorado\'?\'none\':\'\';">'
+        'this.value==\'colorado\'?\'none\':\'\';'
+        'document.getElementById(\'vmixcard\').style.display='
+        'this.value==\'colorado\'?\'\':\'none\';">'
         + console_opts +
         '</select>'
         '</div>'
@@ -318,7 +350,10 @@ def _settings_html(saved=False):
         '</div>'
 
         # ---- MQTT ------------------------------------------------------------
-        + _mqtt_html(s) +
+        + _mqtt_html(s)
+
+        # ---- vMix (Colorado only) --------------------------------------------
+        + _vmix_html(s, console_val) +
 
         # ---- Save ------------------------------------------------------------
         '<div class="card"><h2>Save</h2>'
@@ -411,6 +446,11 @@ async def _handle_settings_post(writer, body):
         'mqtt_user':     form.get('mqtt_user',     _settings.current.get('mqtt_user', '')),
         'mqtt_password': form.get('mqtt_password', _settings.current.get('mqtt_password', '')),
         'mqtt_topic':    form.get('mqtt_topic',    _settings.current.get('mqtt_topic', '')),
+        'vmix_enabled':  'vmix_enabled' in form,
+        'vmix_host':     _clean_hostname(form.get('vmix_host', _settings.current.get('vmix_host', ''))),
+        'vmix_port':     int(form.get('vmix_port', _settings.current.get('vmix_port', 8099))),
+        'vmix_input':    form.get('vmix_input', _settings.current.get('vmix_input', '')),
+        'vmix_field':    form.get('vmix_field', _settings.current.get('vmix_field', 'Clock.Text')),
     })
     await _redirect(writer, '/settings?saved=1')
 

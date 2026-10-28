@@ -15,7 +15,7 @@
 #
 # Flash the following files to the device root (/):
 #   main.py, config.py, settings.py, daktronics.py, colorado.py, webserver.py,
-#   daksports.json
+#   vmix.py, daksports.json
 # =============================================================================
 
 import ujson
@@ -217,7 +217,7 @@ async def serial_reader_task(dak, sport_config, sport_name, mqtt_enabled=False):
             await asyncio.sleep_ms(500)
 
 
-async def colorado_reader_task(cw, mqtt_enabled=False):
+async def colorado_reader_task(cw, mqtt_enabled=False, vmix_enabled=False):
     """Read Colorado System 7 data continuously. update() only returns once
     a meaningful field has changed (see colorado.py)."""
     print('Colorado reader started')
@@ -226,7 +226,13 @@ async def colorado_reader_task(cw, mqtt_enabled=False):
             await cw.update()
             new_data = cw.to_dict()
             new_data['console'] = 'colorado'
+            clock_changed = new_data['Clock'] != webserver.score_data.get('Clock')
             webserver.score_data.update(new_data)
+
+            # Push the clock to vMix first — it's the latency-sensitive one
+            if vmix_enabled and clock_changed:
+                import vmix
+                vmix.clock_ready.set()
 
             if mqtt_enabled:
                 import mqtt_publisher
@@ -246,6 +252,9 @@ async def main():
 
     mqtt_enabled = bool(settings.current.get('mqtt_enabled'))
     console_type = settings.current.get('console', 'daktronics')
+    vmix_enabled = (console_type == 'colorado'
+                    and bool(settings.current.get('vmix_enabled'))
+                    and bool(settings.current.get('vmix_host')))
 
     # 2. Initialise the selected console's serial parser
     if console_type == 'colorado':
@@ -263,7 +272,7 @@ async def main():
         webserver.score_data['console']     = 'colorado'
         webserver.score_data['device_name'] = settings.device_name()
 
-        reader = colorado_reader_task(cw, mqtt_enabled)
+        reader = colorado_reader_task(cw, mqtt_enabled, vmix_enabled)
 
     else:
         with open('daksports.json') as f:
@@ -301,6 +310,12 @@ async def main():
             mqtt_publisher.run(lambda: webserver.score_data)
         ))
         print('MQTT publisher task started')
+
+    # 5. Optionally push the Colorado clock straight to vMix
+    if vmix_enabled:
+        import vmix
+        tasks.append(asyncio.create_task(vmix.run()))
+        print('vMix pusher task started')
 
     await asyncio.gather(*tasks)
 
