@@ -22,6 +22,13 @@ import webserver as _webserver
 # Set by colorado_reader_task whenever Clock changes
 clock_ready = asyncio.Event()
 
+# Shown on the /settings dashboard — the pusher has no other visible output
+# short of a serial REPL, and vMix reports a bad input/field name only in
+# its reply line (e.g. "FUNCTION ER Input not found").
+status     = 'starting'
+last_sent  = ''
+last_reply = ''
+
 
 def _quote(s):
     """Percent-encode a query-string value (input names may contain spaces,
@@ -37,35 +44,59 @@ def _quote(s):
 
 
 async def _drain(reader):
-    """Discard vMix's 'FUNCTION OK ...' replies so its side never blocks on
-    a full socket, and return once the connection drops."""
+    """Consume vMix's 'FUNCTION OK ...' replies so its side never blocks on
+    a full socket, keeping the latest for the dashboard, and return once the
+    connection drops."""
+    global last_reply
     while True:
         line = await reader.readline()
         if not line:
             return
+        last_reply = line.decode().strip()
 
 
-async def run():
-    s      = _settings.current
-    host   = s.get('vmix_host', '')
+def _config():
+    s = _settings.current
+    if not (s.get('vmix_enabled') and s.get('vmix_host')):
+        return None
+    # A pasted "host:8088" (the HTTP API port) would otherwise be handed to
+    # open_connection as the hostname itself
+    host   = s.get('vmix_host', '').split(':')[0]
     port   = int(s.get('vmix_port', 8099))
     prefix = 'FUNCTION SetText Input={}&SelectedName={}&Value='.format(
         _quote(s.get('vmix_input', '')),
         _quote(s.get('vmix_field', 'Clock.Text')),
     )
-    print('vMix pusher starting —', host, port)
+    return host, port, prefix
+
+
+async def run():
+    """Runs for the life of the Colorado console. Settings are re-read on
+    every pass, so enabling/disabling or changing vMix settings in /settings
+    takes effect within a few seconds, without a reboot."""
+    global status, last_sent
 
     while True:
+        cfg = _config()
+        if cfg is None:
+            status = 'disabled'
+            await asyncio.sleep(2)
+            continue
+        host, port, prefix = cfg
+
+        status = 'connecting to {}:{}'.format(host, port)
         try:
             reader, writer = await asyncio.open_connection(host, port)
             print('vMix connected')
         except Exception as e:
             print('vMix connect failed:', e)
+            status = 'connect to {}:{} failed: {!r}'.format(host, port, e)
             await asyncio.sleep(5)
             continue
 
+        status     = 'connected to {}:{}'.format(host, port)
         drain_task = asyncio.create_task(_drain(reader))
-        last_sent  = None
+        sent       = None
         try:
             while True:
                 # Resend at least every 5 s so a vMix restart or a re-added
@@ -74,23 +105,26 @@ async def run():
                     await asyncio.wait_for(clock_ready.wait(), 5)
                     clock_ready.clear()
                 except asyncio.TimeoutError:
-                    last_sent = None
+                    sent = None
 
                 if drain_task.done():
                     raise OSError('connection closed by vMix')
+                if _config() != cfg:
+                    raise OSError('settings changed, reconnecting')
 
                 clock = _webserver.score_data.get('Clock', '')
-                if clock != last_sent:
+                if clock != sent:
                     writer.write((prefix + _quote(clock) + '\r\n').encode())
                     await writer.drain()
-                    last_sent = clock
+                    sent = last_sent = clock
 
         except Exception as e:
-            print('vMix error:', e)
+            print('vMix:', e)
+            status = 'error: {!r}'.format(e)
             drain_task.cancel()
             try:
                 writer.close()
                 await writer.wait_closed()
             except Exception:
                 pass
-            await asyncio.sleep(2)
+            await asyncio.sleep(1)

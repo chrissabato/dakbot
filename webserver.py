@@ -69,6 +69,10 @@ def _parse_form(body):
     return data
 
 
+def _html_escape(s):
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+
 def _clean_hostname(value):
     """Strip a URL scheme, path, and trailing slashes so a pasted URL
     (e.g. https://broker.example.com/) still saves as a bare hostname —
@@ -164,6 +168,15 @@ def _dashboard_html():
             + row('Heat',  score_data.get('HeatNumber', '—'))
             + row('Clock', score_data.get('Clock', '—'))
         )
+        # vmix imports this module, so look it up rather than importing it
+        import sys
+        vm = sys.modules.get('vmix')
+        if vm:
+            status_extra += (
+                row('vMix', _html_escape(vm.status))
+                + row('vMix sent', _html_escape(vm.last_sent or '—'))
+                + row('vMix reply', _html_escape(vm.last_reply or '—'))
+            )
     else:
         status_extra = row('Sport', sport)
 
@@ -239,7 +252,7 @@ def _vmix_html(s, console_val):
         '<input type="text" name="vmix_field" value="' + s.get('vmix_field', 'Clock.Text') + '" '
         'placeholder="Clock.Text">'
         '<p class="note">Sends SetText over vMix\'s TCP API the instant the clock changes, '
-        'instead of waiting for a Data Source poll. Reboot required after changing.</p>'
+        'instead of waiting for a Data Source poll. Applies within a few seconds of saving — no reboot needed.</p>'
         '</div>'
         '</div>'
     )

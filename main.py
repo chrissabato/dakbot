@@ -252,9 +252,9 @@ async def main():
 
     mqtt_enabled = bool(settings.current.get('mqtt_enabled'))
     console_type = settings.current.get('console', 'daktronics')
-    vmix_enabled = (console_type == 'colorado'
-                    and bool(settings.current.get('vmix_enabled'))
-                    and bool(settings.current.get('vmix_host')))
+    # Always runs for Colorado — vmix.run() idles while disabled in settings,
+    # so turning it on in /settings doesn't need a reboot
+    vmix_enabled = console_type == 'colorado'
 
     # 2. Initialise the selected console's serial parser
     if console_type == 'colorado':
