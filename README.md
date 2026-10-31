@@ -191,12 +191,12 @@ Example response (Colorado System 7):
     "EventNumber": "12",
     "HeatNumber": "3",
     "Clock": "1:23",
-    "Lane1Label": "1", "Lane1Place": "", "Lane1Time": "",
-    "Lane2Label": "2", "Lane2Place": "1", "Lane2Time": "58.32",
-    "Lane3Label": "3", "Lane3Place": "", "Lane3Time": "",
-    "Lane4Label": "4", "Lane4Place": "", "Lane4Time": "",
-    "Lane5Label": "5", "Lane5Place": "", "Lane5Time": "",
-    "Lane6Label": "6", "Lane6Place": "", "Lane6Time": "",
+    "Lane1Label": "1", "Lane1Place": "", "Lane1Time": "", "Lane1Alpha": "00",
+    "Lane2Label": "2", "Lane2Place": "1", "Lane2Time": "58.32", "Lane2Alpha": "FF",
+    "Lane3Label": "3", "Lane3Place": "", "Lane3Time": "", "Lane3Alpha": "00",
+    "Lane4Label": "4", "Lane4Place": "", "Lane4Time": "", "Lane4Alpha": "00",
+    "Lane5Label": "5", "Lane5Place": "", "Lane5Time": "", "Lane5Alpha": "00",
+    "Lane6Label": "6", "Lane6Place": "", "Lane6Time": "", "Lane6Alpha": "00",
     "console": "colorado"
 }
 ```

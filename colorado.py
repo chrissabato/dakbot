@@ -430,4 +430,5 @@ class Colorado:
             data['Lane{}Label'.format(ln)] = str(label)
             data['Lane{}Place'.format(ln)] = str(place)
             data['Lane{}Time'.format(ln)]  = str(time_)
+            data['Lane{}Alpha'.format(ln)] = 'FF' if str(time_).strip() else '00'
         return data
