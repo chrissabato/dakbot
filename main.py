@@ -145,6 +145,16 @@ def _timeout_display(count_str):
     return '—' * n
 
 
+def _process_basketball(data):
+    # 3 -> '– – –' (en dashes, space-separated); blank/non-numeric -> ''
+    for side in ('Home', 'Away'):
+        try:
+            n = int(data.get(side + 'TimeOutsLeft-Total', ''))
+        except (ValueError, TypeError):
+            n = 0
+        data[side + 'TimeoutDisplay'] = ' '.join(['–'] * n)
+
+
 def _process_football(data):
     down, togo = data.get('Down', ''), data.get('ToGo', '')
     data['DownAndDistance'] = '{} & {}'.format(down, togo) if down and togo else ''
@@ -162,7 +172,7 @@ def _process_football(data):
 
 _SPORT_PROCESSORS = {
     'baseball': _process_baseball,
-    # 'basketball': _process_basketball,
+    'basketball': _process_basketball,
     'football':   _process_football,
 }
 
