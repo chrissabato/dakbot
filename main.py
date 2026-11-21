@@ -194,6 +194,16 @@ _STICKY_EXCLUDED = (
     'AwayAtBat', 'HomeAtBat',
     'DownAndDistance', 'HomeTimeoutDisplay', 'AwayTimeoutDisplay',
     'PlayClockTimeAlert',
+    # Basketball indicators that switch on/off during play
+    'HomeBonusText', 'AwayBonusText',
+    'Home1-on-1BonusIndicator', 'Home2-shotBonusIndicator',
+    'Away1-on-1BonusIndicator', 'Away2-shotBonusIndicator',
+    'HomePossessionIndicator', 'HomePossessionArrow', 'HomePossessionText',
+    'AwayPossessionIndicator', 'AwayPossessionArrow', 'AwayPossessionText',
+    'HomeTimeOutIndicator', 'HomeTimeOutText',
+    'AwayTimeOutIndicator', 'AwayTimeOutText',
+    'Player-Foul', 'Player-Foul-Points',
+    'HomePlayer-Foul-Points', 'AwayPlayer-Foul-Points',
 )
 
 
