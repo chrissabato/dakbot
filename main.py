@@ -154,6 +154,10 @@ def _process_basketball(data):
             n = 0
         data[side + 'TimeoutDisplay'] = ' '.join(['–'] * n)
 
+    # "8:00 | 1ST" — either half alone if the other is blank
+    parts = [p for p in (data.get('MainClockTime', ''), data.get('GameText', '')) if p]
+    data['ClockPeriod'] = ' | '.join(parts)
+
 
 def _process_football(data):
     down, togo = data.get('Down', ''), data.get('ToGo', '')
